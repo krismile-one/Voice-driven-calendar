@@ -1,7 +1,75 @@
 [project]
-name = "voice-driven-calendar"
+name = "voice-calendar-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "语音日历助手 - 以语音交互为核心的日历管理工具"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    # 后端框架
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "python-dotenv>=1.0.0",
+
+    # 语音识别（在线）
+    "baidu-aip>=4.16.0",
+
+    # 数据库
+    "sqlalchemy>=2.0.23",
+    "aiosqlite>=0.19.0",
+
+    # NLU - 大模型调用
+    "openai>=1.6.1",
+    "anthropic>=0.18.0",
+    "httpx>=0.25.2",
+
+    # 工具
+    "pydantic>=2.5.2",
+    "pydantic-settings>=2.1.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.23.2",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "black>=23.12.0",
+    "isort>=5.13.0",
+    "ruff>=0.1.0",
+]
+
+gui = [
+    "PyQt6>=6.6.1",
+]
+
+# 离线语音识别（可选，不支持 macOS ARM64）
+vosk = [
+    "vosk>=0.3.45",
+    "pyaudio>=0.2.14",
+]
+
+[project.scripts]
+voice-calendar = "voice_calendar_agent.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["voice_calendar_agent"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

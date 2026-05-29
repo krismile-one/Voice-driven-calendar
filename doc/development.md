@@ -32,6 +32,11 @@ voice-calendar-agent/
 │       │   └── utils/
 │       │       ├── __init__.py
 │       │       └── time_parser.py  # 时间解析工具
+│       ├── terminal/            # 终端操作层
+│       │   ├── __init__.py
+│       │   ├── terminal_app.py  # 终端应用主程序
+│       │   ├── command_handler.py # 命令处理器
+│       │   └── operation_interface.py # 操作层抽象接口
 │       └── frontend/
 │           ├── __init__.py
 │           ├── gui/
@@ -49,7 +54,7 @@ voice-calendar-agent/
 │   └── calendar.db          # SQLite数据库
 ├── tests/                   # 测试目录
 ├── pyproject.toml           # 项目配置（uv管理）
-├── main.py                  # 启动入口
+├── main.py                  # 启动入口（支持 --api 和 --terminal 模式）
 ├── .env.example
 ├── .gitignore
 └── README.md
@@ -84,9 +89,8 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "python-dotenv>=1.0.0",
 
-    # 语音识别
-    "vosk>=0.3.45",
-    "pyaudio>=0.2.14",
+    # 语音识别（在线）
+    "baidu-aip>=4.16.0",
 
     # 数据库
     "sqlalchemy>=2.0.23",
@@ -94,10 +98,8 @@ dependencies = [
 
     # NLU - 大模型调用
     "openai>=1.6.1",
+    "anthropic>=0.18.0",
     "httpx>=0.25.2",
-
-    # GUI
-    "PyQt6>=6.6.1",
 
     # 工具
     "pydantic>=2.5.2",
@@ -114,6 +116,16 @@ dev = [
     "black>=23.12.0",
     "isort>=5.13.0",
     "ruff>=0.1.0",
+]
+
+gui = [
+    "PyQt6>=6.6.1",
+]
+
+# 离线语音识别（可选，不支持 macOS ARM64）
+vosk = [
+    "vosk>=0.3.45",
+    "pyaudio>=0.2.14",
 ]
 
 [project.scripts]
@@ -316,34 +328,57 @@ WebSocket连接，实时传输音频数据
 ```python
 # src/backend/core/voice_service.py
 
-import json
-from vosk import Model, KaldiRecognizer
-import pyaudio
+import logging
+from typing import Callable
+from enum import Enum
+from aip import AipSpeech
+
+logger = logging.getLogger(__name__)
+
+class ASRMode(Enum):
+    """语音识别模式"""
+    ONLINE = "online"    # 在线模式（百度语音）
+    OFFLINE = "offline"  # 离线模式（Vosk，可选）
+    HYBRID = "hybrid"    # 混合模式
 
 class VoiceService:
-    def __init__(self, model_path="models/vosk/vosk-model-small-cn-0.22"):
-        self.model = Model(model_path)
-        self.recognizer = KaldiRecognizer(self.model, 16000)
+    def __init__(
+        self,
+        mode: ASRMode = ASRMode.ONLINE,
+        baidu_app_id: str = "",
+        baidu_api_key: str = "",
+        baidu_secret_key: str = "",
+        vosk_model_path: str = "models/vosk/vosk-model-small-cn-0.22",
+    ):
+        self.mode = mode
+        self.baidu_app_id = baidu_app_id
+        self.baidu_api_key = baidu_api_key
+        self.baidu_secret_key = baidu_secret_key
+        self.vosk_model_path = vosk_model_path
         self.is_listening = False
+        self._baidu_client = None
+        self._vosk_recognizer = None
 
-    def start_listening(self, callback):
-        """开始持续监听"""
-        self.is_listening = True
-        stream = pyaudio.PyAudio().open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=16000,
-            input=True,
-            frames_per_buffer=8192
+    def _init_baidu_client(self):
+        """初始化百度语音客户端"""
+        self._baidu_client = AipSpeech(
+            self.baidu_app_id,
+            self.baidu_api_key,
+            self.baidu_secret_key
         )
 
-        while self.is_listening:
-            data = stream.read(4096, exception_on_overflow=False)
-            if self.recognizer.AcceptWaveform(data):
-                result = json.loads(self.recognizer.Result())
-                text = result.get("text", "")
-                if text:
-                    callback(text)
+    def _init_vosk_recognizer(self):
+        """初始化Vosk离线识别器（可选，需安装vosk依赖）"""
+        try:
+            from vosk import Model, KaldiRecognizer
+            self._vosk_model = Model(self.vosk_model_path)
+            self._vosk_recognizer = KaldiRecognizer(self._vosk_model, 16000)
+        except ImportError:
+            logger.warning("vosk未安装，离线模式不可用")
+
+    def start_listening(self, callback: Callable[[str], None]):
+        """开始持续监听"""
+        pass
 
     def stop_listening(self):
         """停止监听"""
@@ -351,7 +386,18 @@ class VoiceService:
 
     def recognize_file(self, audio_path: str) -> str:
         """识别音频文件"""
-        # 实现文件识别逻辑
+        pass
+
+    def recognize_audio_data(self, audio_data: bytes) -> str:
+        """识别音频数据"""
+        pass
+
+    def set_mode(self, mode: ASRMode):
+        """切换识别模式"""
+        pass
+
+    def get_available_modes(self) -> list:
+        """获取可用的识别模式列表"""
         pass
 ```
 
@@ -474,26 +520,39 @@ class CalendarService:
 # src/backend/config.py
 
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     # 数据库
     DATABASE_URL: str = "sqlite:///data/calendar.db"
 
-    # 语音识别
+    # 语音识别配置
+    ASR_MODE: str = "online"  # online/offline/hybrid
+
+    # 在线语音识别（百度）
+    BAIDU_APP_ID: str = ""
+    BAIDU_API_KEY: str = ""
+    BAIDU_SECRET_KEY: str = ""
+
+    # 离线语音识别（可选，需安装vosk）
     VOSK_MODEL_PATH: str = "models/vosk/vosk-model-small-cn-0.22"
-    SAMPLE_RATE: int = 16000
 
     # NLU - 大模型API
-    LLM_PROVIDER: str = "openai"  # openai / anthropic / local
+    LLM_PROVIDER: str = "openai"  # openai/anthropic（deepseek和mimo使用openai格式）
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "gpt-3.5-turbo"
+    LLM_MODEL: str = "deepseek-chat"
+    LLM_BASE_URL: Optional[str] = "https://api.deepseek.com"
 
     # 服务
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    # 提醒配置
+    REMINDER_CHECK_INTERVAL: int = 60
+
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
 ```
 
 ### 6.2 .env.example
@@ -502,17 +561,29 @@ class Settings(BaseSettings):
 # 数据库
 DATABASE_URL=sqlite:///data/calendar.db
 
-# 语音识别
+# 语音识别模式：online（在线）/ offline（离线，需安装vosk）/ hybrid（混合）
+ASR_MODE=online
+
+# 在线语音识别配置（百度）
+BAIDU_APP_ID=
+BAIDU_API_KEY=
+BAIDU_SECRET_KEY=
+
+# 离线语音识别配置（可选，需安装vosk）
 VOSK_MODEL_PATH=models/vosk/vosk-model-small-cn-0.22
 
 # NLU - 大模型API
 LLM_PROVIDER=openai
 LLM_API_KEY=your-api-key-here
-LLM_MODEL=gpt-3.5-turbo
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com
 
 # 服务
 HOST=0.0.0.0
 PORT=8000
+
+# 提醒配置
+REMINDER_CHECK_INTERVAL=60
 ```
 
 ---
