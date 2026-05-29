@@ -2,16 +2,11 @@
 
 # 🎙️ 语音日历助手 · Voice Calendar Agent
 
-**语音管理日程——说一句话，自动变成结构化的日历事件。**
+**动动嘴就能管理日程——说一句话，自动变成结构化的日历事件。**
 
 以语音交互为核心的日历管理工具：通过语音添加、删除、查询日程，由大模型把口语解析成「操作 + 时间 + 标题 + 提醒」，存入本地数据库，并按时提醒。支持在线 / 离线 / 混合三种识别模式。
 
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB)
-![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)
-![uv](https://img.shields.io/badge/Package-uv-DE5FE9)
-![ASR](https://img.shields.io/badge/ASR-Baidu%20%7C%20Vosk-BC4B30)
-![LLM](https://img.shields.io/badge/NLU-DeepSeek%20%7C%20OpenAI%20%7C%20Anthropic-5C7363)
-![Storage](https://img.shields.io/badge/Storage-SQLite-8C8173)
+`Python 3.11+` · `FastAPI` · `uv` · `ASR：百度 / Vosk` · `NLU：DeepSeek` · `SQLite`
 
 </div>
 
@@ -45,8 +40,8 @@
 
 | 模式 | 语音识别 | 是否联网 | 精度 | 隐私 | 成本 | 适用场景 |
 |---|---|---|---|---|---|---|
-| `online` | 百度语音云端 | ✅ 需要 | 高 | 音频上传 | 按量计费 | 追求最高准确率 |
-| `offline` | 本地 Vosk 模型 | ❌ 不需要 | 中 | 数据不出设备 | 零 | 无网络 / 隐私敏感 |
+| `online` | 百度语音云端 | 需要 | 高 | 音频上传 | 按量计费 | 追求最高准确率 |
+| `offline` | 本地 Vosk 模型 | 不需要 | 中 | 数据不出设备 | 零 | 无网络 / 隐私敏感 |
 | `hybrid` | 在线优先，离线兜底 | 部分 | 高 | 视情况 | 较低 | 兼顾精度与可用性 |
 
 > 离线模式需安装 `vosk` 可选依赖，并下载中文模型到 `VOSK_MODEL_PATH` 指定路径。
