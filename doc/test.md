@@ -7,14 +7,14 @@
 | # | 测试类别 | 测试文件 | 测试数 | 状态 | 耗时 | 通过率 | 最后测试时间 |
 |---|----------|----------|--------|------|------|--------|-------------|
 | 1 | 单元测试 - 日历服务 | `tests/unit/test_calendar_service.py` | 4 | ⬜ 未实现（stub） | - | - | - |
-| 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 2 | ✅ 已完成 | - | - | - |
+| 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 4 | ✅ 已完成 | 0.89s | 4/4(100%) | 2026-05-30 |
 | 3 | 单元测试 - 时间解析 | `tests/unit/test_time_parser.py` | 3 | ⬜ 未实现（stub） | - | - | - |
 | 4 | 集成测试 - 事件API | `tests/integration/test_api_events.py` | 4 | ⬜ 未实现（stub） | - | - | - |
 | 5 | 集成测试 - 语音识别 | `tests/integration/test_voice_service.py` | 7 | ✅ 已完成 | 4.03s | 7/7 (100%) | 2026-05-30 |
-| 9 | 集成测试 - ASR→NLU链路 | `test_pipeline.py` | 9 | ✅ 已完成 | - | 9/9 (100%) | 2026-05-30 |
 | 6 | 端到端测试 | `tests/e2e/test_full_flow.py` | 2 | ⬜ 未实现（stub） | - | - | - |
 | 7 | 语音准确率测试 | `tests/voice/test_accuracy.py` | 1 | ⬜ 文件不存在 | - | - | - |
 | 8 | 性能测试 | `tests/performance/test_response_time.py` | 2 | ⬜ 文件不存在 | - | - | - |
+| 9 | 集成测试 - ASR→NLU链路 | `test_pipeline.py` | 9 | ✅ 已完成 | - | 9/9 (100%) | 2026-05-30 |
 
 **图例：** ✅ 已完成且通过 ｜ ❌ 已完成但有失败 ｜ ⬜ 未实现
 
