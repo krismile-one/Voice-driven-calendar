@@ -1,6 +1,6 @@
 # 语音日历助手 - 测试文档
 
-> 最后更新：2026-05-30
+> 最后更新：2026-05-31
 
 ## 测试总览
 
@@ -15,8 +15,9 @@
 | 7 | ASR→NLU→日历三级链路 | tests/e2e/test_voice_pipeline.py | 9 | 9/9 | 13.57s |
 | 8 | 语音准确率测试 | tests/voice/test_accuracy.py | 1 | ⬜ 文件不存在 | - |
 | 9 | 性能测试 | tests/performance/test_response_time.py | 2 | ⬜ 文件不存在 | - |
+| 10 | 前端手动测试 | 浏览器操作验证 | 15 | ⬜ 待验证 | 手动 |
 
-**已实现测试：26 个，全部通过。**
+**已实现自动化测试：26 个，全部通过。前端手动测试：15 项待验证。**
 
 ---
 
@@ -222,8 +223,106 @@ tests/e2e/test_voice_pipeline.py::TestVoiceToCalendar::test_voice_delete_event P
 | DeprecationWarning (timeout) | 3 | TestClient 不应使用 timeout | 无 |
 
 ---
+[toolu_vrtx_01So1Tco4...] ## 7. 前端手动测试（2026-05-31）
 
-## 7. 测试命令
+### 测试环境
+
+- 浏览器：Chrome / Edge（需支持 MediaRecorder）
+- 访问地址：`http://localhost:8000`（必须 localhost，安全上下文）
+- 服务器：`uv run python main.py --api`
+
+### 测试数据
+
+数据库预注入 8 条测试事件用于验证前端显示：
+
+| id | 日期 | 时间 | 标题 | 描述 |
+|----|------|------|------|------|
+| 1 | 2026-05-31 | 09:00-10:00 | 团队晨会 | 每日站会，同步进度 |
+| 2 | 2026-05-31 | 14:00-16:00 | 项目评审 | Q2 项目阶段性评审 |
+| 3 | 2026-05-31 | 19:00 | 晚餐聚会 | 团队聚餐，老地方见 |
+| 4 | 2026-06-01 | 10:00-11:30 | 产品需求讨论 | 讨论下季度产品路线图 |
+| 5 | 2026-06-03 | 15:00-17:00 | 技术分享会 | 分享微服务架构实践经验 |
+| 6 | 2026-06-05 | 09:00-18:00 | 团建活动 | 全员户外拓展训练 |
+| 7 | 2026-06-10 | 08:00-09:00 | 牙医预约 | 年度口腔检查 |
+| 8 | 2026-05-28 | 10:00-11:00 | 月度总结 | 5月工作总结与6月规划 |
+
+### 测试数据注入命令
+
+```bash
+uv run python -c "
+import sys
+sys.path.insert(0, 'src')
+from voice_calendar_agent.config import Settings
+from voice_calendar_agent.backend.models.database import init_db, get_db_session
+from voice_calendar_agent.backend.models.event import Event
+from datetime import datetime
+
+settings = Settings()
+init_db(settings.DATABASE_URL)
+db = get_db_session()
+
+events = [
+    Event(title='团队晨会', description='每日站会，同步进度', start_time=datetime(2026,5,31,9,0), end_time=datetime(2026,5,31,10,0), reminder=True, reminder_minutes=15),
+    Event(title='项目评审', description='Q2 项目阶段性评审', start_time=datetime(2026,5,31,14,0), end_time=datetime(2026,5,31,16,0), reminder=True, reminder_minutes=30),
+    Event(title='晚餐聚会', description='团队聚餐，老地方见', start_time=datetime(2026,5,31,19,0), reminder=True, reminder_minutes=60),
+    Event(title='产品需求讨论', description='讨论下季度产品路线图', start_time=datetime(2026,6,1,10,0), end_time=datetime(2026,6,1,11,30), reminder=True, reminder_minutes=15),
+    Event(title='技术分享会', description='分享微服务架构实践经验', start_time=datetime(2026,6,3,15,0), end_time=datetime(2026,6,3,17,0), reminder=True, reminder_minutes=15),
+    Event(title='团建活动', description='全员户外拓展训练', start_time=datetime(2026,6,5,9,0), end_time=datetime(2026,6,5,18,0), reminder=True, reminder_minutes=1440),
+    Event(title='牙医预约', description='年度口腔检查', start_time=datetime(2026,6,10,8,0), end_time=datetime(2026,6,10,9,0), reminder=True, reminder_minutes=60),
+    Event(title='月度总结', description='5月工作总结与6月规划', start_time=datetime(2026,5,28,10,0), end_time=datetime(2026,5,28,11,0), reminder=False),
+]
+for e in events:
+    db.add(e)
+db.commit()
+db.close()
+print('Inserted 8 test events')
+"
+```
+
+### 前端功能验证清单
+
+| # | 测试项 | 操作 | 预期结果 | 状态 |
+|---|--------|------|----------|------|
+| 1 | 页面加载 | 打开 `http://localhost:8000` | 玻璃态日历居中，当前月份，今天高亮 | ⬜ |
+| 2 | 事件圆点 | 查看日历日期格子 | 5/28、5/31、6/1、6/3、6/5、6/10 有蓝色小圆点 | ⬜ |
+| 3 | 今天多事件 | 查看 5/31 格子 | 3 个圆点（团队晨会、项目评审、晚餐聚会） | ⬜ |
+| 4 | 实时时钟 | 查看底部中央 | 显示当前时间，每秒更新 | ⬜ |
+| 5 | 鼠标滚轮切月 | 在日历上滚动滚轮 | 月份切换，带滑动动画，事件重新加载 | ⬜ |
+| 6 | 3D 倾斜 | 鼠标在日历上移动 | 日历跟随鼠标方向倾斜 | ⬜ |
+| 7 | 点击日期 → 日程模式 | 点击 5/31 | 日历缩小左移，右侧滑入日程面板，列出 3 条事件 | ⬜ |
+| 8 | 日程模式切换日期 | 点击 6/5 | 面板切换为团建活动信息 | ⬜ |
+| 9 | 日程模式返回 | 点击背景空白区域 | 日历恢复居中，面板滑出 | ⬜ |
+| 10 | 录音模式 | Home 状态点击背景 | 出现红色呼吸边框动画 | ⬜ |
+| 11 | 停止录音 | Recording 状态再次点击背景 | 停止录音，触发全链路，返回 Home | ⬜ |
+| 12 | 日程模式禁录音 | Schedule 状态点击背景 | 直接返回 Home，不触发录音 | ⬜ |
+| 13 | 麦克风安全提示 | 非 localhost 访问时点击录音 | Toast 提示"请通过 localhost 访问" | ⬜ |
+| 14 | 移动端触屏 | 手机上左右滑动日历 | 月份切换 | ⬜ |
+| 15 | API 错误处理 | 停止后端后操作 | Toast 提示"无法连接服务" | ⬜ |
+
+### API 验证命令
+
+```bash
+# 验证 5 月事件（应返回 4 条：5/28 月度总结 + 5/31 三事件）
+curl -s "http://localhost:8000/api/events?date=2026-05-01&range=month" | python -m json.tool
+
+# 验证 6 月事件（应返回 4 条）
+curl -s "http://localhost:8000/api/events?date=2026-06-01&range=month" | python -c "import sys,json; d=json.load(sys.stdin); print(f'total={d[\"total\"]}')"
+
+# 验证 5/31 当天事件（应返回 3 条）
+curl -s "http://localhost:8000/api/events?date=2026-05-31&range=day" | python -m json.tool
+```
+
+### 已知问题
+
+| # | 问题 | 影响 | 处理 |
+|---|------|------|------|
+| 1 | `data/calendar.db` 被分支跟踪 | git checkout 时可能覆盖数据库 | `.gitignore` 已加 `*.db`，下次提交后生效 |
+| 2 | 录音需 `localhost` 访问 | 局域网 IP 无法使用麦克风 | `startRecording()` 已加安全上下文检查并提示 |
+| 3 | 非 Chrome/Edge 浏览器 | MediaRecorder 可能不支持 | 已加 `window.MediaRecorder` 检查 |
+
+---
+
+## 8. 测试命令
 
 ```bash
 uv run pytest tests/ -v                          # 运行全部测试

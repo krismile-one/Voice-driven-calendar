@@ -49,14 +49,40 @@
 
 ---
 
-## Day 3: 前端界面 + 优化
+## Day 3: Web 前端主页（2026-05-30 ~ 2026-05-31）
 
 ### 任务进度
 
-- 实现简单的 GUI 或 Web 界面
-- 集成前后端联调
-- 优化识别准确率和响应速度
-- 编写使用说明
+- √ 实现 Web 前端主页 — 单文件 Vue 3 + Tailwind CSS 应用
+  - `frontend/web/index.html` — ~750 行，零构建单文件应用
+  - `frontend/web/static/` — FastAPI StaticFiles 挂载目录
+
+- √ 集成 FastAPI 静态文件服务
+  - `app.py` 新增 StaticFiles 挂载 + 根路由 `/` 返回 index.html
+  - 前后端同源，无需处理跨域
+
+- √ 日历月视图
+  - 周日~周六表头，6×7 日期矩阵，当前月灰色区分
+  - 今天高亮（淡黄背景），事件蓝色小圆点标记（最多 4 个 + "+N" 溢出）
+
+- √ 三状态交互
+  - Home：日历居中，click 背景 → 录音，click 日期 → 日程模式
+  - Recording：红色呼吸边框动画，click 背景 → 停止录音 → 全链路 → 返回 Home
+  - Schedule：日历缩小 62% 左移，右侧面板滑入，click 日期 → 切换日，click 背景 → Home
+
+- √ 3D 倾斜效果 — JS mousemove → `perspective(1200px) rotateX/Y(±8deg)`，mouseleave 平滑回正
+
+- √ 液态玻璃风格 — `backdrop-blur-2xl bg-white/[0.04] border-white/[0.08]`
+
+- √ 实时时钟 — 底部居中 `2026年5月31日 22:16`，每秒更新
+
+- √ 月份切换 — 鼠标滚轮 + 触屏滑动，带方向感知滑入淡出动画
+
+- √ 录音全链路 — MediaRecorder → upload → parse → execute → 刷新事件列表
+
+- √ 录音安全上下文检查 — 检测 `navigator.mediaDevices` 和 `MediaRecorder` 可用性，非安全上下文给出中文提示
+
+- √ 移动端响应式 — 触屏滑动、全屏日程面板、自适应字号
 
 ---
 
@@ -88,7 +114,9 @@ src/voice_calendar_agent/
 │
 ├── frontend/
 │   ├── gui/                            # 全部 stub
-│   └── web/                            # 未开始
+│   └── web/
+│       ├── index.html                  # √ Vue 3 + Tailwind 单文件应用（~750 行）
+│       └── static/                     # FastAPI StaticFiles 挂载目录
 │
 └── terminal/
     ├── terminal_app.py                 # stub
@@ -153,3 +181,60 @@ tests/
 ```
 
 **time_range 取值：** morning(00-12) / afternoon(12-18) / evening(18-24) / day(不过滤)
+
+### 2026-05-31 前端主页实现
+
+**新增文件：**
+- `frontend/web/index.html` — Vue 3 CDN + Tailwind CSS CDN 单文件应用（~750 行）
+- `frontend/web/static/` — FastAPI StaticFiles 挂载目录
+
+**修改文件：**
+- `app.py` — 新增 `StaticFiles` 挂载 + 根路由 `/` 返回 `FileResponse`
+
+**技术要点：**
+- Vue 3 Composition API (`reactive`)，零构建
+- 三状态管理：home / recording / schedule
+- 日历算法：周日起始，6×7 网格，前后月填充
+- API 调用均使用相对路径，前后端同源无跨域
+- 录音全链路：MediaRecorder → `/api/voice/upload` → `/api/voice/parse` → `/api/execute`
+- Glassmorphism 液态玻璃 + 3D 倾斜 + Vue Transition 动画
+
+### 2026-05-31 麦克风安全上下文检查
+
+**问题：** `startRecording()` 直接调用 `navigator.mediaDevices.getUserMedia()`，当页面不在安全上下文（非 localhost/HTTPS）或浏览器不支持时，报错 `Cannot read properties of undefined` 白屏。
+
+**修改文件：** `frontend/web/index.html` — `startRecording()` 函数
+
+**修改内容：**
+```javascript
+// 调用前增加两重检查
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  addToast('麦克风不可用：请通过 http://localhost:8000 访问', 'error')
+  state.mode = 'home'
+  return
+}
+if (!window.MediaRecorder) {
+  addToast('当前浏览器不支持录音功能，请使用 Chrome 或 Edge', 'error')
+  state.mode = 'home'
+  return
+}
+```
+
+### 2026-05-31 测试数据注入
+
+**背景：** 前端开发完成后需验证日历显示和日程面板功能，数据库原本为空。
+
+**操作：** 通过 Python 脚本直接向 SQLite 写入 8 条测试事件，覆盖 5 月（2 天）和 6 月（4 天）。
+
+**插入的测试数据：**
+
+| id | title | start_time | end_time | 日期 |
+|----|-------|-----------|----------|------|
+| 1 | 团队晨会 | 2026-05-31T09:00 | 10:00 | 今天 |
+| 2 | 项目评审 | 2026-05-31T14:00 | 16:00 | 今天 |
+| 3 | 晚餐聚会 | 2026-05-31T19:00 | — | 今天 |
+| 4 | 产品需求讨论 | 2026-06-01T10:00 | 11:30 | |
+| 5 | 技术分享会 | 2026-06-03T15:00 | 17:00 | |
+| 6 | 团建活动 | 2026-06-05T09:00 | 18:00 | |
+| 7 | 牙医预约 | 2026-06-10T08:00 | 09:00 | |
+| 8 | 月度总结 | 2026-05-28T10:00 | 11:00 | 本月已过
