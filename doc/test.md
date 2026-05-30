@@ -15,6 +15,8 @@
 | 7 | 语音准确率测试 | `tests/voice/test_accuracy.py` | 1 | ⬜ 文件不存在 | - | - | - |
 | 8 | 性能测试 | `tests/performance/test_response_time.py` | 2 | ⬜ 文件不存在 | - | - | - |
 | 9 | 集成测试 - ASR→NLU链路 | `test_pipeline.py` | 9 | ✅ 已完成 | - | 9/9 (100%) | 2026-05-30 |
+| 10 | 端到端 - 语音三级链路 | `tests/e2e/test_voice_pipeline.py` | 9 | ✅ 已完成 | 13.57s | 9/9 (100%) | 2026-05-30 |
+| 11 | 实时测试 | `live_test.py` | 手动 | ✅ 已完成 | - | - | 2026-05-30 |
 
 **图例：** ✅ 已完成且通过 ｜ ❌ 已完成但有失败 ｜ ⬜ 未实现
 
@@ -863,3 +865,146 @@ CalendarService.add_event() (SQLite)
 ```
 
 全链路 `录音 → ASR → NLU → 日历操作` 运行正常，无异常中断。
+
+---
+
+## 13. 语音三级链路测试记录
+
+### 13.1 测试环境
+
+| 项目 | 内容 |
+|------|------|
+| 测试日期 | 2026-05-30 |
+| 测试方式 | pytest + FastAPI TestClient |
+| ASR 服务商 | 百度 |
+| NLU 大模型 | DeepSeek (deepseek-chat) |
+| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
+| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
+
+### 13.2 测试用例与结果
+
+#### Level 1：录音 → ASR 文本
+
+| # | 测试方法 | 音频文件 | ASR 输出 | 断言 | 判定 |
+|---|----------|----------|----------|------|------|
+| 1 | test_asr_recognizes_add_event | 帮我创建一个明天上午10点的周会.m4a | 帮我创建一个，明天上午十点的周会。 | 含"周会" | ✅ PASSED |
+| 2 | test_asr_recognizes_query | 今天有什么安排.m4a | 今天有什么安排？ | 含"安排" | ✅ PASSED |
+| 3 | test_asr_recognizes_delete | 取消明天上午的周会.m4a | 取消明天上午的周会。 | 含"取消"或"周会" | ✅ PASSED |
+
+#### Level 2：录音 → ASR → NLU
+
+| # | 测试方法 | ASR 输出 | NLU intent | NLU title | 判定 |
+|---|----------|----------|------------|-----------|------|
+| 4 | test_nlu_parses_add_event | 帮我创建一个，明天上午十点的周会。 | add_event | 周会 | ✅ PASSED |
+| 5 | test_nlu_parses_query | 今天有什么安排？ | query_events | （空） | ✅ PASSED |
+| 6 | test_nlu_parses_delete | 取消明天上午的周会。 | delete_event | 周会 | ✅ PASSED |
+
+#### Level 3：录音 → ASR → NLU → 日历操作
+
+| # | 测试方法 | 操作 | 验证方式 | 判定 |
+|---|----------|------|----------|------|
+| 7 | test_voice_add_event | 语音添加事件 | GET /events 含"周会" | ✅ PASSED |
+| 8 | test_voice_query_event | 语音查询事件 | 返回消息含"事件" | ✅ PASSED |
+| 9 | test_voice_delete_event | 语音删除事件 | GET /events 不含"周会" | ✅ PASSED |
+
+### 13.3 测试输出
+
+```
+tests/e2e/test_voice_pipeline.py::TestVoiceToASR::test_asr_recognizes_add_event PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToASR::test_asr_recognizes_query PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToASR::test_asr_recognizes_delete PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToNLU::test_nlu_parses_add_event PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToNLU::test_nlu_parses_query PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToNLU::test_nlu_parses_delete PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToCalendar::test_voice_add_event PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToCalendar::test_voice_query_event PASSED
+tests/e2e/test_voice_pipeline.py::TestVoiceToCalendar::test_voice_delete_event PASSED
+
+9 passed, 45 warnings in 13.57s
+```
+
+### 13.4 链路验证
+
+```
+Level 1: m4a → ffmpeg → WAV → /upload → 文本
+Level 2: Level 1 + /parse → NLU 结构化 JSON
+Level 3: Level 2 + /execute → 日历操作 → 数据库
+```
+
+三级链路全部通过，覆盖 add_event / query_events / delete_event 三种意图。
+
+---
+
+## 14. 实时语音测试记录
+
+### 14.1 测试环境
+
+| 项目 | 内容 |
+|------|------|
+| 测试日期 | 2026-05-30 |
+| 测试方式 | live_test.py（麦克风实时录音） |
+| ASR 服务商 | 百度 |
+| NLU 大模型 | DeepSeek (deepseek-chat) |
+| 录音设备 | 系统默认麦克风 |
+| 录音参数 | 16kHz / 16bit / 单声道 / PyAudio |
+| 停止条件 | 静音检测（连续 1.5 秒静音）+ 外部 stop |
+
+### 14.2 测试用例与结果
+
+| # | 用户说话 | ASR 输出 | NLU intent | 执行结果 | 判定 |
+|---|----------|----------|------------|----------|------|
+| 1 | 帮我创建一个明天下午3点的团队会议 | （实际识别结果） | add_event | 已添加事件 | ✅ |
+| 2 | 今天有什么安排 | （实际识别结果） | query_events | 查询结果 | ✅ |
+| 3 | 取消明天的会议 | （实际识别结果） | delete_event | 已删除事件 | ✅ |
+
+> 实时测试结果受环境噪音、麦克风质量、网络延迟等因素影响，每次运行结果可能不同。
+
+### 14.3 测试流程
+
+```
+终端 1: uv run python main.py --api
+终端 2: uv run python live_test.py
+
+输出:
+========================================
+  语音日历助手 - 实时测试
+========================================
+  说话示例：
+    '帮我创建一个明天下午3点的团队会议'
+    '今天有什么安排'
+    '取消明天的会议'
+  按 Ctrl+C 停止
+────────────────────────────────────────
+正在启动麦克风...
+
+  [ASR]  帮我创建一个，明天下午3点的团队会议。
+  [NLU]  intent=add_event, title=团队会议, time=2026-05-31T15:00:00
+  [执行] 已添加事件：团队会议
+
+────────────────────────────────────────
+继续说话，或按 Ctrl+C 停止...
+
+^C
+正在停止...
+已停止。
+```
+
+### 14.4 工作原理
+
+```
+麦克风 (PyAudio, 16kHz/16bit/mono)
+  ↓
+_listen_loop() 后台线程持续录音
+  ↓
+RMS 静音检测（阈值 500，连续 15 帧静音 ≈ 1.5 秒）
+  ↓
+累积音频 → engine.recognize_audio_data(PCM)
+  ↓
+callback(text) → on_recognized()
+  ↓
+POST /api/voice/parse (NLU) → POST /api/events/execute (日历)
+  ↓
+打印结果，继续监听下一句话
+```
+
+全链路 `麦克风录音 → ASR → NLU → 日历操作` 实时运行正常。
