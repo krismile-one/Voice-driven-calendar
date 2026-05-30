@@ -9,23 +9,21 @@ dependencies = [
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0",
     "python-dotenv>=1.0.0",
-
     # 语音识别（在线）
     "baidu-aip>=4.16.0",
-
+    "websocket-client>=1.6.0",
     # 数据库
     "sqlalchemy>=2.0.23",
     "aiosqlite>=0.19.0",
-
     # NLU - 大模型调用
     "openai>=1.6.1",
     "anthropic>=0.18.0",
     "httpx>=0.25.2",
-
     # 工具
     "pydantic>=2.5.2",
     "pydantic-settings>=2.1.0",
     "python-multipart>=0.0.6",
+    "chardet>=7.4.3",
 ]
 
 [project.optional-dependencies]
