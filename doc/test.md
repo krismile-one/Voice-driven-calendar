@@ -1,5 +1,38 @@
 # 语音日历助手 - 测试文档
 
+## 0. 测试总览
+
+### 测试进度表
+
+| # | 测试类别 | 测试文件 | 测试数 | 状态 | 耗时 | 通过率 | 最后测试时间 |
+|---|----------|----------|--------|------|------|--------|-------------|
+| 1 | 单元测试 - 日历服务 | `tests/unit/test_calendar_service.py` | 4 | ⬜ 未实现（stub） | - | - | - |
+| 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 2 | ⬜ 未实现（stub） | - | - | - |
+| 3 | 单元测试 - 时间解析 | `tests/unit/test_time_parser.py` | 3 | ⬜ 未实现（stub） | - | - | - |
+| 4 | 集成测试 - 事件API | `tests/integration/test_api_events.py` | 4 | ⬜ 未实现（stub） | - | - | - |
+| 5 | 集成测试 - 语音识别 | `tests/integration/test_voice_service.py` | 7 | ✅ 已完成 | 4.03s | 7/7 (100%) | 2026-05-30 |
+| 6 | 端到端测试 | `tests/e2e/test_full_flow.py` | 2 | ⬜ 未实现（stub） | - | - | - |
+| 7 | 语音准确率测试 | `tests/voice/test_accuracy.py` | 1 | ⬜ 文件不存在 | - | - | - |
+| 8 | 性能测试 | `tests/performance/test_response_time.py` | 2 | ⬜ 文件不存在 | - | - | - |
+
+**图例：** ✅ 已完成且通过 ｜ ❌ 已完成但有失败 ｜ ⬜ 未实现
+
+### 已执行测试详情（集成测试 - 语音识别）
+
+| # | 测试方法 | 输入 | 判定 |
+|---|----------|------|------|
+| 1 | test_recognize_audio_add_event | 帮我创建一个明天下午三点的团队会议.m4a | ✅ PASSED |
+| 2 | test_recognize_audio_query_events | 今天有什么安排.m4a | ✅ PASSED |
+| 3 | test_recognize_audio_delete_event | 取消明天上午的会议.m4a | ✅ PASSED |
+| 4 | test_recognize_audio_silence | 空白录音.m4a | ✅ PASSED |
+| 5 | test_recognize_audio_data_returns_string | 1 秒静音 PCM | ✅ PASSED |
+| 6 | test_upload_endpoint_recognizes_text | 今天有什么安排.wav | ✅ PASSED |
+| 7 | test_upload_endpoint_returns_correct_format | 空 bytes WAV | ✅ PASSED |
+
+详细结果见 [第 10 节](#10-语音识别测试记录)。
+
+---
+
 ## 1. 测试策略
 
 ### 1.1 测试类型
@@ -584,3 +617,64 @@ jobs:
         uv run black --check src/ tests/
         uv run isort --check-only src/ tests/
 ```
+
+---
+
+## 10. 语音识别测试记录
+
+### 10.1 测试环境
+
+| 项目 | 内容 |
+|------|------|
+| 测试日期 | 2026-05-30 |
+| Python 版本 | 3.11.15 |
+| pytest 版本 | 9.0.3 |
+| ASR 服务商 | 百度 |
+| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
+| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
+
+### 10.2 测试用例与结果
+
+| # | 测试方法 | 输入 | 预期结果 | 实际结果 | 判定 |
+|---|----------|------|----------|----------|------|
+| 1 | test_recognize_audio_add_event | 帮我创建一个明天下午三点的团队会议.m4a | 返回字符串，包含关键词 | "帮我创建一个，明天下午三点的团队**回忆**。" | ✅ PASSED |
+| 2 | test_recognize_audio_query_events | 今天有什么安排.m4a | 返回字符串，包含"安排" | "今天有什么安排？" | ✅ PASSED |
+| 3 | test_recognize_audio_delete_event | 取消明天上午的会议.m4a | 返回字符串，包含"取消"或"会议" | "取消明天上午的会议。" | ✅ PASSED |
+| 4 | test_recognize_audio_silence | 空白录音.m4a | 抛出 Exception | 3301 - speech quality error | ✅ PASSED |
+| 5 | test_recognize_audio_data_returns_string | 1 秒静音 PCM（struct 生成） | 抛出异常或返回空文本 | 返回空文本 | ✅ PASSED |
+| 6 | test_upload_endpoint_recognizes_text | 今天有什么安排.wav（经 ffmpeg 转换） | 状态码 200，响应含非空 text | text="今天有什么安排？" | ✅ PASSED |
+| 7 | test_upload_endpoint_returns_correct_format | 空 bytes WAV | 状态码 200，响应含 text 和 confidence | text="识别失败: ..." | ✅ PASSED |
+
+### 10.3 测试输出
+
+```
+tests/integration/test_voice_service.py::TestVoiceServiceFileRecognition::test_recognize_audio_add_event PASSED
+tests/integration/test_voice_service.py::TestVoiceServiceFileRecognition::test_recognize_audio_query_events PASSED
+tests/integration/test_voice_service.py::TestVoiceServiceFileRecognition::test_recognize_audio_delete_event PASSED
+tests/integration/test_voice_service.py::TestVoiceServiceFileRecognition::test_recognize_audio_silence PASSED
+tests/integration/test_voice_service.py::TestVoiceServiceAudioData::test_recognize_audio_data_returns_string PASSED
+tests/integration/test_voice_service.py::TestVoiceAPIEndpoint::test_upload_endpoint_recognizes_text PASSED
+tests/integration/test_voice_service.py::TestVoiceAPIEndpoint::test_upload_endpoint_returns_correct_format PASSED
+
+7 passed, 15 warnings in 4.03s
+```
+
+### 10.4 Warnings 汇总
+
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| PydanticDeprecatedSince20 | 1 | Settings 使用 class-based config，Pydantic V3 将移除 |
+| InsecureRequestWarning | 1 | 测试客户端使用未验证的 HTTPS |
+| StarletteDeprecationWarning | 1 | httpx 与 starlette.testclient 兼容性警告 |
+| DeprecationWarning (on_event) | 3 | FastAPI 的 on_event 已废弃，建议改用 lifespan |
+
+以上 warnings 均不影响功能，属于现有代码的兼容性提示。
+
+### 10.5 识别准确率统计
+
+| 指标 | 结果 |
+|------|------|
+| 有效语音识别成功率 | 3/3（100%） |
+| 完全准确率 | 2/3（66.7%） |
+| 同音字偏差 | 1/3（"会议" → "回忆"，百度 ASR 偏差） |
+| 空白录音误识别率 | 0/1（0%，正确返回错误） |
