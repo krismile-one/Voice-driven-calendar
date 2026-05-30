@@ -5,8 +5,11 @@
 """
 
 import logging
+import os
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from voice_calendar_agent.config import Settings
 from voice_calendar_agent.backend.models.database import init_db
@@ -62,6 +65,19 @@ class Application:
             prefix="/api/voice",
             tags=["语音识别"],
         )
+
+        # ── 前端静态文件服务 ──
+        frontend_dir = os.path.join(os.path.dirname(__file__), "frontend", "web")
+        static_dir = os.path.join(frontend_dir, "static")
+        os.makedirs(static_dir, exist_ok=True)
+
+        self.fastapi_app.mount(
+            "/static", StaticFiles(directory=static_dir), name="static"
+        )
+
+        @self.fastapi_app.get("/")
+        async def root():
+            return FileResponse(os.path.join(frontend_dir, "index.html"))
 
     def _setup_events(self):
         """
