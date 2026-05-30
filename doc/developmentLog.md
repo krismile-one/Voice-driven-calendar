@@ -17,17 +17,17 @@
   - **待实现**：`backend/core/calendar_service.py` 中的函数
   - **待实现**：`backend/api/events.py` 中的接口处理函数
 
-- [ ] 集成百度在线语音识别（0%）
+- [✅] 集成百度在线语音识别（80%）
   - 服务类框架已定义：`backend/core/voice_service.py`
-  - **待实现**：百度语音 SDK 初始化
-  - **待实现**：`recognize_file()` 和 `recognize_audio_data()` 函数
+  - **实现**：百度语音 SDK 初始化
+  - **实现**：`recognize_file()` 和 `recognize_audio_data()` 函数
   - **待实现**：`start_listening()` 持续监听功能
 
-- [ ] 实现简单的NLU解析（0%）
+- [✅] 实现简单的NLU解析（100%）
   - 服务类框架已定义：`backend/core/nlu_service.py`
-  - **待实现**：`_init_client()` 大模型客户端初始化
-  - **待实现**：`parse_command()` 解析函数
-  - **待实现**：`_build_prompt()` 提示词构建
+  - **实现**：`_init_client()` 大模型客户端初始化
+  - **实现**：`parse_command()` 解析函数
+  - **实现**：`_build_prompt()` 提示词构建
 
 ---
 
