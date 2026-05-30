@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>语音日历助手</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"', '"Microsoft YaHei"', '"Helvetica Neue"', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    /* ── 背景渐变动画 ── */
+    @keyframes gradient-shift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .bg-animated {
+      background: linear-gradient(135deg, #0a0a14 0%, #111827 25%, #0f172a 50%, #0c0f1a 75%, #0a0a14 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 20s ease infinite;
+    }
+
+    /* ── 录音呼吸边框 ── */
+    @keyframes breathe {
+      0%, 100% { box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.25), inset 0 0 80px rgba(239, 68, 68, 0.1); }
+      50%      { box-shadow: inset 0 0 80px rgba(239, 68, 68, 0.5), inset 0 0 140px rgba(239, 68, 68, 0.2); }
+    }
+    .recording-overlay {
+      animation: breathe 2.2s ease-in-out infinite;
+    }
+
+    /* ── 月份滑动过渡（前进：从右进入，向左退出） ── */
+    .slide-next-enter-active { transition: all 0.35s ease-out; }
+    .slide-next-leave-active { transition: all 0.25s ease-in; }
+    .slide-next-enter-from  { opacity: 0; transform: translateX(36px); }
+    .slide-next-leave-to    { opacity: 0; transform: translateX(-36px); }
+
+    /* ── 月份滑动过渡（后退：从左进入，向右退出） ── */
+    .slide-prev-enter-active { transition: all 0.35s ease-out; }
+    .slide-prev-leave-active { transition: all 0.25s ease-in; }
+    .slide-prev-enter-from  { opacity: 0; transform: translateX(-36px); }
+    .slide-prev-leave-to    { opacity: 0; transform: translateX(36px); }
+
+    /* ── Toast 提示 ── */
+    .toast-enter-active { transition: all 0.3s ease-out; }
+    .toast-leave-active { transition: all 0.25s ease-in; }
+    .toast-enter-from   { opacity: 0; transform: translateY(-16px) scale(0.95); }
+    .toast-leave-to     { opacity: 0; transform: translateY(-16px) scale(0.95); }
+
+    /* ── 日程面板事件列表 ── */
+    .list-enter-active { transition: all 0.3s ease-out; }
+    .list-leave-active { transition: all 0.2s ease-in; }
+    .list-enter-from   { opacity: 0; transform: translateX(16px); }
+    .list-leave-to     { opacity: 0; transform: translateX(-16px); }
+
+    /* ── 日历卡片 tilt 过渡（鼠标离开时平滑回正） ── */
+    .tilt-transition {
+      transition: transform 0.4s ease-out;
+    }
+
+    /* ── 日期格子 hover 效果 ── */
+    .date-cell:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .date-cell.today:hover {
+      background: rgba(250, 204, 21, 0.2);
+    }
+
+    /* ── 自定义滚动条 ── */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body class="bg-animated min-h-screen text-white antialiased">
+  <div id="app">
+    <!-- ════════════════════════════════════════════ -->
+    <!-- 背景点击捕获层 (z-0)                         -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="fixed inset-0 z-0" @click="handleBackgroundClick"></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- 录音呼吸边框覆盖层 (z-10)                    -->
+    <!-- ════════════════════════════════════════════ -->
+    <div
+      v-if="state.mode === 'recording'"
+      class="fixed inset-0 z-10 pointer-events-none recording-overlay"
+    ></div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- 录音状态指示 (z-10)                          -->
+    <!-- ════════════════════════════════════════════ -->
+    <div
+      v-if="state.mode === 'recording'"
+      class="fixed top-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none"
+    >
+      <div class="flex items-center gap-3 px-5 py-2.5 rounded-full bg-red-500/20 border border-red-500/30 backdrop-blur-md">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+        <span class="text-sm text-red-300/90 font-medium">正在录音 · 点击空白处停止</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- 日历容器 (z-20)                               -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="fixed inset-0 z-20 flex items-center justify-center pointer-events-none">
+      <div
+        class="pointer-events-auto tilt-transition"
+        :style="calendarTransform"
+        @mousemove="handleTilt"
+        @mouseleave="resetTilt"
+        @wheel.prevent="handleWheel"
+        @touchstart="handleTouchStart"
+        @touchend="handleTouchEnd"
+        @click.stop
+      >
+        <!-- ── 液态玻璃卡片 ── -->
+        <div
+          ref="tiltCard"
+          class="bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-2xl p-3 md:p-6 select-none w-[94vw] max-w-[400px]"
+        >
+          <!-- ── 月份导航 ── -->
+          <div class="flex items-center justify-between mb-4 px-1">
+            <button
+              @click="goToPrevMonth"
+              class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/40 hover:text-white/80 text-lg"
+              title="上个月"
+            >←</button>
+            <span class="text-base md:text-lg font-medium text-white/85 tracking-wide">
+              {{ state.currentMonth.getFullYear() }}年 {{ state.currentMonth.getMonth() + 1 }}月
+            </span>
+            <button
+              @click="goToNextMonth"
+              class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/40 hover:text-white/80 text-lg"
+              title="下个月"
+            >→</button>
+          </div>
+
+          <!-- ── 星期标题 ── -->
+          <div class="grid grid-cols-7 mb-1.5">
+            <div
+              v-for="wd in weekdays"
+              :key="wd"
+              class="text-center text-xs md:text-sm text-white/25 py-1.5 font-medium"
+            >{{ wd }}</div>
+          </div>
+
+          <!-- ── 日期网格（Transition 包裹） ── -->
+          <Transition
+            :name="state.slideDirection === 'next' ? 'slide-next' : 'slide-prev'"
+            mode="out-in"
+          >
+            <div :key="state.monthKey" class="grid grid-cols-7 gap-0.5 md:gap-1">
+              <div
+                v-for="(cell, idx) in flatCells"
+                :key="idx"
+                class="date-cell aspect-square flex flex-col items-center justify-center rounded-lg cursor-pointer transition-colors relative"
+                :class="getCellClasses(cell)"
+                @click="handleDateClick(cell)"
+              >
+                <!-- 日期数字 -->
+                <span
+                  class="text-sm md:text-base leading-none"
+                  :class="cell.isCurrentMonth ? 'text-white/75' : 'text-white/20'"
+                >{{ cell.day }}</span>
+
+                <!-- 事件圆点标记 -->
+                <div
+                  v-if="getCellEvents(cell.dateStr).length > 0"
+                  class="flex gap-[2px] mt-[3px]"
+                >
+                  <span
+                    v-for="(dot, di) in getCellDots(cell.dateStr)"
+                    :key="di"
+                    class="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full inline-block"
+                    :class="di < 3 ? 'bg-blue-400/80' : 'bg-blue-400/40'"
+                  ></span>
+                  <span
+                    v-if="getCellEvents(cell.dateStr).length > 4"
+                    class="text-[8px] md:text-[10px] text-white/30 leading-none"
+                  >+{{ getCellEvents(cell.dateStr).length - 4 }}</span>
+                </div>
+
+              </div>
+            </div>
+          </Transition>
+
+          <!-- ── 实时时钟 ── -->
+          <div class="text-center mt-3 md:mt-4 text-xs md:text-sm text-white/20 font-mono tracking-wider">
+            {{ formatClock(state.currentTime) }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- 日程面板 (z-30)                               -->
+    <!-- ════════════════════════════════════════════ -->
+    <div
+      class="fixed top-0 right-0 h-full w-full md:w-[55%] z-30 transition-transform duration-500 ease-out bg-white/[0.03] backdrop-blur-3xl border-l border-white/[0.06] shadow-2xl"
+      :class="state.mode === 'schedule' ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'"
+      @click.stop
+    >
+      <div class="p-6 md:p-8 h-full flex flex-col">
+        <!-- ── 面板标题 ── -->
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl md:text-2xl font-medium text-white/85">
+              {{ state.selectedDate ? formatDateChinese(state.selectedDate) : '' }}
+            </h2>
+            <p class="text-xs text-white/20 mt-1">
+              {{ state.selectedDate ? formatWeekday(state.selectedDate) : '' }}
+            </p>
+          </div>
+          <span class="text-[11px] text-white/20 hidden md:block">点击空白处返回日历</span>
+        </div>
+
+        <!-- ── 返回按钮（移动端） ── -->
+        <button
+          class="md:hidden w-full mb-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/50 text-sm hover:bg-white/10 transition-colors"
+          @click="returnToHome"
+        >← 返回日历</button>
+
+        <!-- ── 事件列表 ── -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
+          <div v-if="state.scheduleEvents.length === 0 && !state.scheduleEventsLoading" class="text-center mt-16 md:mt-24">
+            <div class="text-4xl mb-4 opacity-20">📭</div>
+            <p class="text-white/25 text-sm">这一天暂无日程安排</p>
+          </div>
+
+          <div v-if="state.scheduleEventsLoading" class="flex items-center justify-center mt-24">
+            <span class="text-white/30 text-sm">加载中...</span>
+          </div>
+
+          <TransitionGroup name="list" tag="div">
+            <div
+              v-for="ev in state.scheduleEvents"
+              :key="ev.id"
+              class="mb-3 p-4 rounded-xl bg-white/[0.04] border border-white/[0.05] hover:bg-white/[0.08] transition-colors"
+            >
+              <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium text-white/80 truncate">{{ ev.title }}</div>
+                  <div class="text-sm text-white/35 mt-1.5 font-mono">
+                    {{ formatEventTime(ev) }}
+                  </div>
+                  <div
+                    v-if="ev.description"
+                    class="text-sm text-white/25 mt-1.5 line-clamp-2"
+                  >{{ ev.description }}</div>
+                </div>
+                <div
+                  v-if="ev.reminder"
+                  class="ml-3 flex-shrink-0 text-[10px] text-white/20 bg-white/5 px-2 py-0.5 rounded-full"
+                  title="已开启提醒">
+                  🔔 {{ ev.reminder_minutes }}分钟
+                </div>
+              </div>
+            </div>
+          </TransitionGroup>
+        </div>
+
+        <!-- ── 底部语音入口 ── -->
+        <div class="mt-4 pt-4 border-t border-white/[0.05]">
+          <button
+            class="w-full py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white/35 text-sm hover:bg-white/[0.06] hover:text-white/55 transition-all"
+            @click="addToast('使用语音添加日程：返回首页后点击背景区域开始录音', 'info')"
+          >
+            🎤 语音添加日程
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Toast 消息容器 (z-50)                         -->
+    <!-- ════════════════════════════════════════════ -->
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none">
+      <TransitionGroup name="toast" tag="div" class="flex flex-col items-center gap-2">
+        <div
+          v-for="toast in state.toasts"
+          :key="toast.id"
+          class="pointer-events-auto px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl backdrop-blur-xl border"
+          :class="toastClasses(toast.type)"
+        >
+          {{ toast.message }}
+        </div>
+      </TransitionGroup>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- Vue 应用逻辑                                  -->
+  <!-- ════════════════════════════════════════════ -->
+  <script>
+    const { createApp, reactive, computed, onMounted, onUnmounted, ref, nextTick } = Vue
+
+    createApp({
+      setup() {
+        // ──────────────────────────────────────
+        // 1. 响应式状态
+        // ──────────────────────────────────────
+        const now = new Date()
+        const state = reactive({
+          mode: 'home',           // 'home' | 'recording' | 'schedule'
+          currentMonth: new Date(now.getFullYear(), now.getMonth(), 1),
+          today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+          selectedDate: null,     // Date | null
+          slideDirection: 'next', // 'next' | 'prev'
+          monthKey: 0,
+          eventsMap: {},          // 'YYYY-MM-DD' → EventResponse[]
+          scheduleEvents: [],
+          monthEventsLoading: false,
+          scheduleEventsLoading: false,
+          currentTime: new Date(),
+          mediaRecorder: null,
+          audioChunks: [],
+          toasts: [],
+        })
+
+        const tiltCard = ref(null)
+
+        // ──────────────────────────────────────
+        // 2. 工具函数
+        // ──────────────────────────────────────
+
+        /** Date → 'YYYY-MM-DD' */
+        function fmtDate(d) {
+          const y = d.getFullYear()
+          const m = String(d.getMonth() + 1).padStart(2, '0')
+          const day = String(d.getDate()).padStart(2, '0')
+          return `${y}-${m}-${day}`
+        }
+
+        /** Date → '2026年5月30日' */
+        function fmtDateCN(d) {
+          return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
+        }
+
+        /** Date → 星期几 */
+        function fmtWeekday(d) {
+          const names = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+          return names[d.getDay()]
+        }
+
+        /** Date → '2026年5月30日 22:16' */
+        function fmtClock(d) {
+          const h = String(d.getHours()).padStart(2, '0')
+          const m = String(d.getMinutes()).padStart(2, '0')
+          return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${h}:${m}`
+        }
+
+        /** 生成 6×7 日历矩阵，返回一维数组 */
+        function generateCalendar(year, month) {
+          const firstDay = new Date(year, month, 1)
+          const lastDay = new Date(year, month + 1, 0)
+          const startDow = firstDay.getDay()     // 0=Sunday
+          const daysInMonth = lastDay.getDate()
+          const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7
+
+          const cells = []
+          for (let i = 0; i < totalCells; i++) {
+            if (i < startDow) {
+              const d = new Date(year, month - 1, 0)
+              const prevDays = d.getDate()
+              const day = prevDays - startDow + i + 1
+              const date = new Date(year, month - 1, day)
+              cells.push({ day, isCurrentMonth: false, isNextMonth: false, dateStr: fmtDate(date), date })
+            } else if (i < startDow + daysInMonth) {
+              const day = i - startDow + 1
+              const date = new Date(year, month, day)
+              cells.push({ day, isCurrentMonth: true, isNextMonth: false, dateStr: fmtDate(date), date })
+            } else {
+              const day = i - startDow - daysInMonth + 1
+              const date = new Date(year, month + 1, day)
+              cells.push({ day, isCurrentMonth: false, isNextMonth: true, dateStr: fmtDate(date), date })
+            }
+          }
+          return cells
+        }
+
+        // ──────────────────────────────────────
+        // 3. 计算属性
+        // ──────────────────────────────────────
+
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+
+        const flatCells = computed(() => {
+          return generateCalendar(
+            state.currentMonth.getFullYear(),
+            state.currentMonth.getMonth()
+          )
+        })
+
+        const todayStr = computed(() => fmtDate(state.today))
+
+        const selectedDateStr = computed(() => {
+          return state.selectedDate ? fmtDate(state.selectedDate) : null
+        })
+
+        /** 日历卡片 transform：home 居中，schedule 缩小左移 */
+        const calendarTransform = computed(() => {
+          if (state.mode === 'schedule') {
+            return { transform: 'scale(0.62) translateX(-58%)' }
+          }
+          return { transform: 'scale(1) translateX(0)' }
+        })
+
+        // ──────────────────────────────────────
+        // 4. 日期格子样式
+        // ──────────────────────────────────────
+
+        function getCellClasses(cell) {
+          const classes = []
+          // 今天高亮（淡黄色）
+          if (cell.dateStr === todayStr.value) {
+            if (cell.dateStr === selectedDateStr.value) {
+              classes.push('ring-2 ring-blue-400/50')
+            } else {
+              classes.push('bg-yellow-400/12 ring-1 ring-yellow-400/30')
+            }
+          }
+          // 选中日期（淡蓝色，覆盖今天）
+          else if (cell.dateStr === selectedDateStr.value) {
+            classes.push('bg-blue-400/12 ring-2 ring-blue-400/40')
+          }
+          // 空白天数（非当前月且无事件）
+          if (!cell.isCurrentMonth && getCellEvents(cell.dateStr).length === 0) {
+            // 默认灰色由 span class 处理
+          }
+          return classes
+        }
+
+        function getCellEvents(dateStr) {
+          return state.eventsMap[dateStr] || []
+        }
+
+        function getCellDots(dateStr) {
+          const events = getCellEvents(dateStr)
+          return events.slice(0, Math.min(events.length, 4))
+        }
+
+        // ──────────────────────────────────────
+        // 5. 节日/节气占位（预留接口）
+        // ──────────────────────────────────────
+
+        function getFestivalBackground(dateStr) {
+          // TODO: 后续实现数据源
+          return null
+        }
+
+        // ──────────────────────────────────────
+        // 6. API 请求
+        // ──────────────────────────────────────
+
+        async function apiGet(url) {
+          try {
+            const res = await fetch(url)
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}))
+              addToast(err.detail || `请求失败 (${res.status})`, 'error')
+              return null
+            }
+            return await res.json()
+          } catch (e) {
+            addToast('无法连接服务，请确认后端已启动', 'error')
+            return null
+          }
+        }
+
+        async function apiPost(url, body, isFormData) {
+          try {
+            const options = { method: 'POST' }
+            if (isFormData) {
+              options.body = body
+            } else {
+              options.headers = { 'Content-Type': 'application/json' }
+              options.body = JSON.stringify(body)
+            }
+            const res = await fetch(url, options)
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}))
+              addToast(err.detail || `请求失败 (${res.status})`, 'error')
+              return null
+            }
+            return await res.json()
+          } catch (e) {
+            addToast('无法连接服务，请确认后端已启动', 'error')
+            return null
+          }
+        }
+
+        // ──────────────────────────────────────
+        // 7. 事件数据加载
+        // ──────────────────────────────────────
+
+        async function fetchMonthEvents(year, month) {
+          state.monthEventsLoading = true
+          const dateParam = `${year}-${String(month + 1).padStart(2, '0')}-01`
+          const data = await apiGet(`/api/events?date=${dateParam}&range=month`)
+          if (data && data.events) {
+            const map = {}
+            for (const ev of data.events) {
+              const ds = ev.start_time.substring(0, 10)
+              if (!map[ds]) map[ds] = []
+              map[ds].push(ev)
+            }
+            state.eventsMap = map
+          }
+          state.monthEventsLoading = false
+        }
+
+        async function fetchDayEvents(dateStr) {
+          state.scheduleEventsLoading = true
+          const data = await apiGet(`/api/events?date=${dateStr}&range=day`)
+          state.scheduleEvents = data ? data.events : []
+          state.scheduleEventsLoading = false
+        }
+
+        // ──────────────────────────────────────
+        // 8. 月份导航
+        // ──────────────────────────────────────
+
+        function goToNextMonth() {
+          state.slideDirection = 'next'
+          const cm = new Date(state.currentMonth)
+          cm.setMonth(cm.getMonth() + 1)
+          state.currentMonth = cm
+          state.monthKey++
+          fetchMonthEvents(cm.getFullYear(), cm.getMonth())
+        }
+
+        function goToPrevMonth() {
+          state.slideDirection = 'prev'
+          const cm = new Date(state.currentMonth)
+          cm.setMonth(cm.getMonth() - 1)
+          state.currentMonth = cm
+          state.monthKey++
+          fetchMonthEvents(cm.getFullYear(), cm.getMonth())
+        }
+
+        function handleWheel(e) {
+          if (e.deltaY > 0) goToNextMonth()
+          else goToPrevMonth()
+        }
+
+        // ──────────────────────────────────────
+        // 9. 触摸滑动（移动端切月）
+        // ──────────────────────────────────────
+
+        let touchStartX = 0
+        function handleTouchStart(e) {
+          touchStartX = e.touches[0].clientX
+        }
+        function handleTouchEnd(e) {
+          const deltaX = e.changedTouches[0].clientX - touchStartX
+          if (Math.abs(deltaX) > 50) {
+            if (deltaX < 0) goToNextMonth()
+            else goToPrevMonth()
+          }
+        }
+
+        // ──────────────────────────────────────
+        // 10. 日程面板
+        // ──────────────────────────────────────
+
+        async function handleDateClick(cell) {
+          if (state.mode === 'recording') return
+
+          if (state.mode === 'home') {
+            state.selectedDate = cell.date
+            state.mode = 'schedule'
+            await fetchDayEvents(cell.dateStr)
+          } else if (state.mode === 'schedule') {
+            state.selectedDate = cell.date
+            await fetchDayEvents(cell.dateStr)
+          }
+        }
+
+        function returnToHome() {
+          state.mode = 'home'
+          state.selectedDate = null
+          state.scheduleEvents = []
+        }
+
+        function formatEventTime(ev) {
+          const start = ev.start_time
+          if (!start) return ''
+          const d = new Date(start)
+          const h = String(d.getHours()).padStart(2, '0')
+          const m = String(d.getMinutes()).padStart(2, '0')
+          let result = `${h}:${m}`
+          if (ev.end_time) {
+            const ed = new Date(ev.end_time)
+            const eh = String(ed.getHours()).padStart(2, '0')
+            const em = String(ed.getMinutes()).padStart(2, '0')
+            result += ` - ${eh}:${em}`
+          }
+          return result
+        }
+
+        // ──────────────────────────────────────
+        // 11. 背景点击处理（三种模式）
+        // ──────────────────────────────────────
+
+        function handleBackgroundClick() {
+          if (state.mode === 'home') {
+            startRecording()
+          } else if (state.mode === 'recording') {
+            stopRecording()
+          } else if (state.mode === 'schedule') {
+            returnToHome()
+          }
+        }
+
+        // ──────────────────────────────────────
+        // 12. 录音逻辑
+        // ──────────────────────────────────────
+
+        async function startRecording() {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+              ? 'audio/webm;codecs=opus'
+              : 'audio/webm'
+            const recorder = new MediaRecorder(stream, { mimeType })
+            state.mediaRecorder = recorder
+            state.audioChunks = []
+
+            recorder.ondataavailable = (e) => {
+              if (e.data.size > 0) state.audioChunks.push(e.data)
+            }
+
+            recorder.onstop = async () => {
+              stream.getTracks().forEach(t => t.stop())
+              state.mode = 'home'
+
+              if (state.audioChunks.length === 0) {
+                addToast('未录制到音频，请重试', 'error')
+                return
+              }
+
+              const blob = new Blob(state.audioChunks, { type: mimeType })
+              addToast('正在识别语音...', 'info')
+
+              // Step 1: 上传音频
+              const formData = new FormData()
+              formData.append('audio', blob, 'recording.webm')
+              const uploadResult = await apiPost('/api/voice/upload', formData, true)
+
+              if (!uploadResult || !uploadResult.text || uploadResult.text.startsWith('识别失败')) {
+                addToast('语音识别失败，请重试', 'error')
+                return
+              }
+
+              addToast(`识别结果: "${uploadResult.text}"`, 'info')
+
+              // Step 2: NLU 解析
+              const parseResult = await apiPost(
+                `/api/voice/parse?text=${encodeURIComponent(uploadResult.text)}`
+              )
+
+              if (!parseResult || parseResult.intent === 'unknown') {
+                addToast(`听到了 "${uploadResult.text}"，但无法理解指令`, 'error')
+                return
+              }
+
+              // Step 3: 执行
+              const execResult = await apiPost('/api/execute', parseResult)
+              if (execResult) {
+                addToast(execResult.message || '操作完成', 'success')
+              }
+
+              // 刷新月视图
+              await fetchMonthEvents(
+                state.currentMonth.getFullYear(),
+                state.currentMonth.getMonth()
+              )
+            }
+
+            recorder.onerror = () => {
+              addToast('录音设备异常', 'error')
+              state.mode = 'home'
+            }
+
+            recorder.start()
+            state.mode = 'recording'
+            addToast('开始录音 · 点击空白处停止', 'info')
+          } catch (err) {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+              addToast('麦克风权限被拒绝，请在浏览器设置中允许', 'error')
+            } else {
+              addToast('无法访问麦克风: ' + (err.message || '未知错误'), 'error')
+            }
+            state.mode = 'home'
+          }
+        }
+
+        function stopRecording() {
+          if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+            state.mediaRecorder.stop()
+          }
+        }
+
+        // ──────────────────────────────────────
+        // 13. 3D 倾斜效果
+        // ──────────────────────────────────────
+
+        function handleTilt(e) {
+          const card = tiltCard.value
+          if (!card) return
+          const rect = card.getBoundingClientRect()
+          const x = e.clientX - rect.left
+          const y = e.clientY - rect.top
+          const halfW = rect.width / 2
+          const halfH = rect.height / 2
+          const rotateY = ((x - halfW) / halfW) * 8   // max ±8deg
+          const rotateX = ((y - halfH) / halfH) * -8  // max ±8deg
+          card.style.transform = `perspective(1200px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`
+        }
+
+        function resetTilt(e) {
+          const card = tiltCard.value
+          if (!card) return
+          card.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg)'
+        }
+
+        // ──────────────────────────────────────
+        // 14. Toast 消息
+        // ──────────────────────────────────────
+
+        let toastId = 0
+        function addToast(message, type) {
+          const id = ++toastId
+          state.toasts.push({ id, message, type: type || 'info' })
+          setTimeout(() => {
+            const idx = state.toasts.findIndex(t => t.id === id)
+            if (idx !== -1) state.toasts.splice(idx, 1)
+          }, 3500)
+        }
+
+        function toastClasses(type) {
+          switch (type) {
+            case 'success': return 'bg-emerald-500/20 border-emerald-500/30 text-emerald-200'
+            case 'error':   return 'bg-red-500/20 border-red-500/30 text-red-200'
+            default:        return 'bg-white/10 border-white/15 text-white/75'
+          }
+        }
+
+        // ──────────────────────────────────────
+        // 15. 实时时钟
+        // ──────────────────────────────────────
+
+        let clockTimer = null
+
+        // ──────────────────────────────────────
+        // 16. 生命周期
+        // ──────────────────────────────────────
+
+        onMounted(() => {
+          // 初始加载当月事件
+          fetchMonthEvents(state.currentMonth.getFullYear(), state.currentMonth.getMonth())
+          // 启动实时时钟
+          clockTimer = setInterval(() => {
+            state.currentTime = new Date()
+          }, 1000)
+        })
+
+        onUnmounted(() => {
+          if (clockTimer) clearInterval(clockTimer)
+          if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+            state.mediaRecorder.stop()
+          }
+        })
+
+        // ──────────────────────────────────────
+        // 17. 暴露给模板
+        // ──────────────────────────────────────
+
+        return {
+          state,
+          tiltCard,
+          weekdays,
+          flatCells,
+          calendarTransform,
+          getCellClasses,
+          getCellEvents,
+          getCellDots,
+          handleWheel,
+          handleTouchStart,
+          handleTouchEnd,
+          handleDateClick,
+          handleBackgroundClick,
+          handleTilt,
+          resetTilt,
+          goToPrevMonth,
+          goToNextMonth,
+          returnToHome,
+          formatClock: fmtClock,
+          formatDateChinese: fmtDateCN,
+          formatWeekday: fmtWeekday,
+          formatEventTime,
+          addToast,
+          toastClasses,
+        }
+      },
+    }).mount('#app')
+  </script>
+</body>
+</html>
