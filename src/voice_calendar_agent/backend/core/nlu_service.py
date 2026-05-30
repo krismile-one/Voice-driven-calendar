@@ -130,7 +130,7 @@ class NLUService:
         """
         if not text or not text.strip():
             return {"intent": "unknown", "title": "", "time": None,
-                    "reminder": True, "reminder_minutes": 0, "description": ""}
+                    "time_range": "day", "reminder": True, "reminder_minutes": 0, "description": ""}
 
         try:
             self._init_client()
@@ -145,7 +145,7 @@ class NLUService:
         except Exception as e:
             logger.error(f"NLU 解析失败: {e}")
             return {"intent": "unknown", "title": "", "time": None,
-                    "reminder": True, "reminder_minutes": 0, "description": ""}
+                    "time_range": "day", "reminder": True, "reminder_minutes": 0, "description": ""}
 
     def _build_prompt(self, text: str) -> str:
         """
@@ -170,13 +170,20 @@ class NLUService:
         把"明天""下周三""三点一刻(=15分)""下午三点"等换算成绝对时间；
         查询某一天但没有具体时刻时，用当天的 00:00:00；
         完全没有时间则填 null
+- time_range: 时间段，取值 morning(上午) / afternoon(下午) / evening(晚上) / day(全天)。
+        用户说"上午"则 morning，"下午"则 afternoon，"晚上"则 evening；
+        没有提到时间段则填 day
 - reminder: 是否需要提醒，true 或 false
 - reminder_minutes: 提前多少分钟提醒，整数，没提到则填 0
 - description: 备注说明，没有则空字符串
 
-示例：
+示例 1（具体时间）：
 输入："明天下午3点一刻开会，提前半小时提醒我"
-输出：{{"intent":"add_event","title":"开会","time":"{now.strftime('%Y-%m-%d')}T15:15:00","reminder":true,"reminder_minutes":30,"description":""}}
+输出：{{"intent":"add_event","title":"开会","time":"{now.strftime('%Y-%m-%d')}T15:15:00","time_range":"day","reminder":true,"reminder_minutes":30,"description":""}}
+
+示例 2（时间段查询）：
+输入："明天上午有哪些事情"
+输出：{{"intent":"query_events","title":"","time":"{(now.replace(day=now.day+1)).strftime('%Y-%m-%d')}T00:00:00","time_range":"morning","reminder":false,"reminder_minutes":0,"description":""}}
 
 语音识别可能产生同音字错误，请根据日历场景语义自动修正 title 中的错误：
 - "回忆""会意""回议" → "会议"
@@ -253,6 +260,7 @@ class NLUService:
             "intent": data.get("intent", "unknown"),
             "title": data.get("title", ""),
             "time": data.get("time"),                       # ISO 字符串或 None
+            "time_range": data.get("time_range", "day"),    # morning/afternoon/evening/day
             "reminder": data.get("reminder", True),
             "reminder_minutes": data.get("reminder_minutes", 0),
             "description": data.get("description", ""),

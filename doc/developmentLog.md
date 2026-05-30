@@ -134,3 +134,22 @@ tests/
 - 精确匹配（title 完全一致）→ 唯一匹配则直接删除
 - 模糊匹配（title 包含关键词）→ 唯一匹配则删除，多个匹配则提示用户确认
 - 无匹配 → 返回"未找到相关事件"
+
+### 2026-05-30 查询增加时间段过滤
+
+**问题：** 用户说"明天上午有哪些事情"，NLU 输出 00:00:00，查询返回全天事件，没有按上午/下午过滤。
+
+**修改文件：**
+- `nlu_service.py` — prompt 新增 `time_range` 字段，fallback 返回加 `time_range`
+- `voice.py` — `NLUResponse` 新增 `time_range: str = "day"`
+- `events.py` — `/execute` 的 `query_events` 分支根据 `time_range` 过滤
+
+**NLU 输出变化：**
+
+```
+用户："明天上午有哪些事情"
+修改前: time="2026-05-31T00:00:00"                    → 查全天
+修改后: time="2026-05-31T00:00:00", time_range="morning" → 只查上午 (hour < 12)
+```
+
+**time_range 取值：** morning(00-12) / afternoon(12-18) / evening(18-24) / day(不过滤)

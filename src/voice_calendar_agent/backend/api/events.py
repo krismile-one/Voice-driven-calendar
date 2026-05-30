@@ -286,8 +286,19 @@ async def execute_command(nlu_result: NLUResponse, db=Depends(get_db)):
 
     elif intent == "query_events":
         events = service.get_events(date=start_time, range="day")
+
+        # 根据 time_range 过滤时间段
+        time_range = nlu_result.time_range
+        if time_range == "morning" and events:
+            events = [e for e in events if e.start_time.hour < 12]
+        elif time_range == "afternoon" and events:
+            events = [e for e in events if 12 <= e.start_time.hour < 18]
+        elif time_range == "evening" and events:
+            events = [e for e in events if e.start_time.hour >= 18]
+
         if not events:
-            return MessageResponse(message="该时间段没有事件")
+            range_name = {"morning": "上午", "afternoon": "下午", "evening": "晚上"}.get(time_range, "该时间段")
+            return MessageResponse(message=f"{range_name}没有事件")
         titles = "、".join(e.title for e in events)
         return MessageResponse(message=f"找到 {len(events)} 个事件：{titles}")
 
