@@ -260,14 +260,25 @@ async def execute_command(nlu_result: NLUResponse, db=Depends(get_db)):
 
     elif intent == "delete_event":
         events = service.get_events(date=start_time, range="day")
-        matched = [e for e in events if title in e.title] if title else events
-        if not matched:
-            raise HTTPException(status_code=404, detail=f"未找到匹配的事件：{title}")
-        event_id = matched[0].id
-        success = service.delete_event(event_id)
-        if not success:
-            raise HTTPException(status_code=500, detail="删除事件失败")
-        return MessageResponse(message=f"已删除事件：{matched[0].title}", id=event_id)
+        if not events:
+            return MessageResponse(message="该时间段没有事件")
+
+        # 精确匹配
+        exact = [e for e in events if e.title == title]
+        if len(exact) == 1:
+            service.delete_event(exact[0].id)
+            return MessageResponse(message=f"已删除事件：{exact[0].title}", id=exact[0].id)
+
+        # 模糊匹配
+        fuzzy = [e for e in events if title in e.title] if title else events
+        if len(fuzzy) == 0:
+            return MessageResponse(message=f"未找到与'{title}'相关的事件")
+        elif len(fuzzy) == 1:
+            service.delete_event(fuzzy[0].id)
+            return MessageResponse(message=f"已删除事件：{fuzzy[0].title}", id=fuzzy[0].id)
+        else:
+            titles = "、".join(e.title for e in fuzzy)
+            return MessageResponse(message=f"找到多个事件：{titles}，请指定具体事件名称")
 
     elif intent == "update_event":
         # update_event 需要更多信息（改什么字段），NLU 当前不输出，提示用户
