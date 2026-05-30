@@ -41,19 +41,23 @@ class Settings(BaseSettings):
         default="online",
         description="语音识别模式 (online/offline/hybrid)"
     )
+    ASR_PROVIDER: str = Field(
+        default="baidu",
+        description="语音识别服务商 (baidu/xunfei)"
+    )
 
-    # 在线语音识别配置（百度）
-    BAIDU_APP_ID: str = Field(
+    # 语音识别凭证（百度和讯飞共用）
+    ASR_APP_ID: str = Field(
         default="",
-        description="百度语音应用ID"
+        description="语音识别应用ID"
     )
-    BAIDU_API_KEY: str = Field(
+    ASR_API_KEY: str = Field(
         default="",
-        description="百度语音API Key"
+        description="语音识别API Key"
     )
-    BAIDU_SECRET_KEY: str = Field(
+    ASR_SECRET_KEY: str = Field(
         default="",
-        description="百度语音Secret Key"
+        description="语音识别Secret Key"
     )
 
     # 离线语音识别配置（可选）

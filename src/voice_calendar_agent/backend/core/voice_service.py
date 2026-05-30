@@ -1,14 +1,42 @@
 """
 语音识别服务
 
-支持在线（百度）和离线（Vosk，可选）语音识别，可通过配置切换。
+支持在线（百度）和在线（讯飞）语音识别，可通过配置切换。
 """
 
+import base64
+import hashlib
+import hmac
+import io
+import json
 import logging
-from typing import Optional, Callable
+import queue
+import struct
+import threading
+import time
+from datetime import UTC, datetime
 from enum import Enum
+from typing import Callable, Optional
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
+
+try:
+    from aip import AipSpeech
+except ImportError:
+    AipSpeech = None
+    logger.warning("baidu-aip 未安装，百度语音识别不可用")
+
+try:
+    import websocket
+
+    HAS_WEBSOCKET_CLIENT = True
+except ImportError:
+    HAS_WEBSOCKET_CLIENT = False
+    logger.warning("websocket-client 未安装，讯飞语音识别不可用")
+
+
+# ========== 常量 ==========
 
 
 class ASRMode(Enum):
@@ -20,9 +48,44 @@ class ASRMode(Enum):
     - OFFLINE: 离线模式（Vosk，需安装vosk依赖）
     - HYBRID: 混合模式（优先在线，失败回退离线）
     """
+
     ONLINE = "online"
     OFFLINE = "offline"
     HYBRID = "hybrid"
+
+
+# ========== 工厂函数 ==========
+
+_voice_service_instance: Optional["VoiceService"] = None
+
+
+def get_voice_service(settings=None) -> "VoiceService":
+    """
+    获取语音识别服务单例
+
+    输入：
+        settings: 应用配置对象（可选，首次调用时需要）
+    输出：
+        VoiceService - 语音识别服务实例
+    """
+    global _voice_service_instance
+    if _voice_service_instance is None:
+        if settings is None:
+            from voice_calendar_agent.config import Settings
+
+            settings = Settings()
+        _voice_service_instance = VoiceService(
+            mode=ASRMode(settings.ASR_MODE) if isinstance(settings.ASR_MODE, str) else settings.ASR_MODE,
+            provider=settings.ASR_PROVIDER,
+            app_id=settings.ASR_APP_ID,
+            api_key=settings.ASR_API_KEY,
+            secret_key=settings.ASR_SECRET_KEY,
+            vosk_model_path=settings.VOSK_MODEL_PATH,
+        )
+    return _voice_service_instance
+
+
+# ========== 语音识别服务类 ==========
 
 
 class VoiceService:
@@ -33,9 +96,10 @@ class VoiceService:
 
     属性：
     - mode: 识别模式（online/offline/hybrid）
-    - baidu_app_id: 百度语音应用ID
-    - baidu_api_key: 百度语音API Key
-    - baidu_secret_key: 百度语音Secret Key
+    - provider: 识别服务商（baidu/xunfei）
+    - app_id: 应用ID
+    - api_key: API Key
+    - secret_key: Secret Key
     - vosk_model_path: Vosk模型路径（离线模式）
     - is_listening: 是否正在监听
     """
@@ -43,9 +107,10 @@ class VoiceService:
     def __init__(
         self,
         mode: ASRMode = ASRMode.ONLINE,
-        baidu_app_id: str = "",
-        baidu_api_key: str = "",
-        baidu_secret_key: str = "",
+        provider: str = "baidu",
+        app_id: str = "",
+        api_key: str = "",
+        secret_key: str = "",
         vosk_model_path: str = "models/vosk/vosk-model-small-cn-0.22",
     ):
         """
@@ -53,20 +118,34 @@ class VoiceService:
 
         输入：
             mode: 识别模式
-            baidu_app_id: 百度语音应用ID
-            baidu_api_key: 百度语音API Key
-            baidu_secret_key: 百度语音Secret Key
+            provider: 识别服务商（baidu/xunfei）
+            app_id: 应用ID
+            api_key: API Key
+            secret_key: Secret Key
             vosk_model_path: Vosk模型路径（仅离线模式）
         输出：无
         """
         self.mode = mode
-        self.baidu_app_id = baidu_app_id
-        self.baidu_api_key = baidu_api_key
-        self.baidu_secret_key = baidu_secret_key
+        self.provider = provider
+        self.app_id = app_id
+        self.api_key = api_key
+        self.secret_key = secret_key
         self.vosk_model_path = vosk_model_path
         self.is_listening = False
         self._baidu_client = None
         self._vosk_recognizer = None
+        self._engine = None
+
+    def _get_engine(self):
+        """获取语音识别引擎实例"""
+        if self._engine is None:
+            if self.provider == "baidu":
+                self._engine = BaiduASREngine(self.app_id, self.api_key, self.secret_key)
+            elif self.provider == "xunfei":
+                self._engine = XunfeiASREngine(self.app_id, self.api_key, self.secret_key)
+            else:
+                raise ValueError(f"不支持的语音识别服务商: {self.provider}")
+        return self._engine
 
     def _init_baidu_client(self):
         """
@@ -114,7 +193,7 @@ class VoiceService:
         输出：
             str - 识别出的文本
         """
-        pass
+        return self._get_engine().recognize_file(audio_path)
 
     def recognize_audio_data(self, audio_data: bytes) -> str:
         """
@@ -125,7 +204,7 @@ class VoiceService:
         输出：
             str - 识别出的文本
         """
-        pass
+        return self._get_engine().recognize_audio_data(audio_data)
 
     def set_mode(self, mode: ASRMode):
         """
@@ -146,3 +225,245 @@ class VoiceService:
             list - 可用模式列表
         """
         pass
+
+
+# ========== 百度语音识别引擎 ==========
+
+
+class BaiduASREngine:
+    """百度语音识别引擎"""
+
+    def __init__(self, app_id: str, api_key: str, secret_key: str):
+        if AipSpeech is None:
+            raise ImportError("baidu-aip 未安装，请运行: uv add baidu-aip")
+        self._client = AipSpeech(app_id, api_key, secret_key)
+
+    def recognize_file(self, audio_path: str) -> str:
+        """识别音频文件"""
+        with open(audio_path, "rb") as f:
+            audio_data = f.read()
+
+        fmt = audio_path.rsplit(".", 1)[-1].lower() if "." in audio_path else "pcm"
+        if fmt not in ("pcm", "wav", "amr"):
+            fmt = "pcm"
+
+        result = self._client.asr(audio_data, fmt, 16000, {"dev_pid": 1537})
+
+        if result.get("err_no") == 0:
+            return "".join(result.get("result", []))
+        else:
+            raise Exception(f"百度语音识别错误: {result.get('err_no')} - {result.get('err_msg')}")
+
+    def recognize_audio_data(self, audio_data: bytes) -> str:
+        """识别PCM音频数据"""
+        result = self._client.asr(audio_data, "pcm", 16000, {"dev_pid": 1537})
+
+        if result.get("err_no") == 0:
+            return "".join(result.get("result", []))
+        else:
+            raise Exception(f"百度语音识别错误: {result.get('err_no')} - {result.get('err_msg')}")
+
+
+# ========== 讯飞语音识别引擎 ==========
+
+
+class XunfeiASREngine:
+    """讯飞语音识别引擎（WebSocket 协议）"""
+
+    HOST_URL = "ws-api.xfyun.cn"
+    PATH = "/v2/iat"
+
+    def __init__(self, app_id: str, api_key: str, secret_key: str):
+        if not HAS_WEBSOCKET_CLIENT:
+            raise ImportError("websocket-client 未安装，请运行: uv add websocket-client")
+        self.app_id = app_id
+        self.api_key = api_key
+        self.secret_key = secret_key
+
+    def _build_auth_url(self) -> str:
+        """生成带鉴权信息的 WebSocket URL"""
+        now = datetime.now(UTC)
+        date_str = now.strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+        signature_origin = f"host: {self.HOST_URL}\ndate: {date_str}\nGET {self.PATH} HTTP/1.1"
+        signature_sha = hmac.new(
+            self.secret_key.encode("utf-8"),
+            signature_origin.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).digest()
+        signature = base64.b64encode(signature_sha).decode("utf-8")
+
+        auth_origin = (
+            f'api_key="{self.api_key}", algorithm="hmac-sha256", '
+            f'headers="host date request-line", signature="{signature}"'
+        )
+        authorization = base64.b64encode(auth_origin.encode("utf-8")).decode("utf-8")
+
+        return f"wss://{self.HOST_URL}{self.PATH}?{urlencode({'authorization': authorization, 'date': date_str, 'host': self.HOST_URL})}"
+
+    def recognize_file(self, audio_path: str) -> str:
+        """识别音频文件"""
+        with open(audio_path, "rb") as f:
+            audio_data = f.read()
+
+        fmt = audio_path.rsplit(".", 1)[-1].lower() if "." in audio_path else "pcm"
+
+        # WAV 格式需要提取 PCM 数据
+        if fmt == "wav" and len(audio_data) > 44:
+            audio_data = audio_data[44:]
+
+        return self._send_audio(audio_data)
+
+    def recognize_audio_data(self, audio_data: bytes) -> str:
+        """识别 PCM 音频数据"""
+        return self._send_audio(audio_data)
+
+    def _send_audio(self, audio_data: bytes) -> str:
+        """通过 WebSocket 发送音频数据并获取识别结果"""
+        app = _XunfeiWebSocketApp(self._build_auth_url(), self.app_id)
+        app.connect()
+        app.send_audio(audio_data)
+        results = app.get_results()
+        app.close()
+
+        if not results:
+            raise Exception("讯飞语音识别无结果返回")
+
+        return "".join(results)
+
+
+class _XunfeiWebSocketApp:
+    """讯飞 WebSocket 客户端封装（基于 websocket-client 线程模式）"""
+
+    def __init__(self, url: str, app_id: str = ""):
+        self.url = url
+        self.app_id = app_id
+        self.ws = None
+        self.results: list[str] = []
+        self.is_finished = False
+        self.error: Optional[str] = None
+        self._connected_event = threading.Event()
+        self._send_queue: queue.Queue = queue.Queue()
+
+    def connect(self):
+        """建立 WebSocket 连接"""
+        self.ws = websocket.WebSocketApp(
+            self.url,
+            on_open=self._on_open,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close,
+        )
+        threading.Thread(target=self.ws.run_forever, daemon=True).start()
+        if not self._connected_event.wait(timeout=10):
+            raise TimeoutError("讯飞 WebSocket 连接超时")
+
+    def _on_open(self, ws):
+        self._connected_event.set()
+        threading.Thread(target=self._sender, daemon=True).start()
+
+    def _sender(self):
+        """发送线程：从队列中取出数据并发送"""
+        while True:
+            try:
+                data = self._send_queue.get(timeout=30)
+            except queue.Empty:
+                break
+            if data is None:
+                break
+            try:
+                self.ws.send(data)
+            except Exception as e:
+                self.error = str(e)
+                self.is_finished = True
+                break
+
+    def _on_message(self, ws, message):
+        try:
+            resp = json.loads(message)
+
+            if resp.get("code") != 0:
+                self.error = resp.get("message", "未知错误")
+                self.is_finished = True
+                self._send_queue.put(None)
+                return
+
+            data = resp.get("data")
+            if data and "result" in data:
+                result = data.get("result")
+                if result:
+                    wss_data = result.get("ws", [])
+                    text = "".join(
+                        cw[0]
+                        for item in wss_data
+                        for cw in item.get("cw", [])
+                    )
+                    if text:
+                        self.results.append(text)
+
+            if data and data.get("status") == 2:
+                self.is_finished = True
+                self._send_queue.put(None)
+
+        except json.JSONDecodeError:
+            self.error = "解析讯飞响应失败"
+            self.is_finished = True
+            self._send_queue.put(None)
+
+    def _on_error(self, ws, error):
+        self.error = str(error)
+        self.is_finished = True
+        self._connected_event.set()
+        self._send_queue.put(None)
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        self.is_finished = True
+        self._connected_event.set()
+        self._send_queue.put(None)
+
+    def send_audio(self, audio_data: bytes):
+        """发送音频数据（分片）"""
+        chunk_size = 1280
+        status = 0
+        offset = 0
+
+        while offset < len(audio_data):
+            chunk = audio_data[offset : offset + chunk_size]
+            offset += chunk_size
+
+            if offset >= len(audio_data):
+                status = 2
+
+            frame = {
+                "common": {"app_id": self.app_id},
+                "business": {"language": "zh_cn", "domain": "iat", "accent": "mandarin"},
+                "data": {
+                    "status": status,
+                    "format": "audio/L16;rate=16000",
+                    "encoding": "raw",
+                    "audio": base64.b64encode(chunk).decode("utf-8"),
+                },
+            }
+            self._send_queue.put(json.dumps(frame))
+
+            if status == 0:
+                status = 1
+
+    def get_results(self) -> list[str]:
+        """等待识别完成并返回结果"""
+        start_time = time.time()
+        while not self.is_finished:
+            if time.time() - start_time > 30:
+                raise TimeoutError("讯飞语音识别超时")
+            time.sleep(0.1)
+
+        if self.error:
+            raise Exception(f"讯飞语音识别错误: {self.error}")
+
+        return self.results
+
+    def close(self):
+        """关闭连接"""
+        self._send_queue.put(None)
+        if self.ws:
+            self.ws.close()
