@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 from voice_calendar_agent.backend.core.voice_service import VoiceService, get_voice_service
+from voice_calendar_agent.backend.core.nlu_service import get_nlu_service
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +44,18 @@ class NLUResponse(BaseModel):
     属性：
     - intent: 意图类型 (add_event/delete_event/update_event/query_events/unknown)
     - title: 事件标题
-    - time: 时间描述
-    - date: 日期描述
+    - time: ISO8601绝对时间字符串
     - reminder: 是否提醒
+    - reminder_minutes: 提前提醒分钟数
+    - description: 事件描述
     """
 
     intent: str
     title: Optional[str] = None
     time: Optional[str] = None
-    date: Optional[str] = None
     reminder: bool = True
+    reminder_minutes: int = 0
+    description: Optional[str] = None
 
 
 # ========== API端点 ==========
@@ -99,11 +102,17 @@ async def parse_voice_command(text: str):
     解析语音指令文本
 
     输入：
-        text: 语音识别后的文本
+        text: 语音识别后的文本（query参数）
     输出：
         NLUResponse - NLU解析结果（意图、标题、时间等）
     """
-    pass
+    try:
+        nlu_service = get_nlu_service()
+        result = nlu_service.parse_command(text)
+        return NLUResponse(**result)
+    except Exception as e:
+        logger.error(f"NLU解析失败: {e}")
+        return NLUResponse(intent="unknown")
 
 
 @router.websocket("/stream")

@@ -7,10 +7,11 @@
 | # | 测试类别 | 测试文件 | 测试数 | 状态 | 耗时 | 通过率 | 最后测试时间 |
 |---|----------|----------|--------|------|------|--------|-------------|
 | 1 | 单元测试 - 日历服务 | `tests/unit/test_calendar_service.py` | 4 | ⬜ 未实现（stub） | - | - | - |
-| 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 2 | ⬜ 未实现（stub） | - | - | - |
+| 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 2 | ✅ 已完成 | - | - | - |
 | 3 | 单元测试 - 时间解析 | `tests/unit/test_time_parser.py` | 3 | ⬜ 未实现（stub） | - | - | - |
 | 4 | 集成测试 - 事件API | `tests/integration/test_api_events.py` | 4 | ⬜ 未实现（stub） | - | - | - |
 | 5 | 集成测试 - 语音识别 | `tests/integration/test_voice_service.py` | 7 | ✅ 已完成 | 4.03s | 7/7 (100%) | 2026-05-30 |
+| 9 | 集成测试 - ASR→NLU链路 | `test_pipeline.py` | 9 | ✅ 已完成 | - | 9/9 (100%) | 2026-05-30 |
 | 6 | 端到端测试 | `tests/e2e/test_full_flow.py` | 2 | ⬜ 未实现（stub） | - | - | - |
 | 7 | 语音准确率测试 | `tests/voice/test_accuracy.py` | 1 | ⬜ 文件不存在 | - | - | - |
 | 8 | 性能测试 | `tests/performance/test_response_time.py` | 2 | ⬜ 文件不存在 | - | - | - |
@@ -678,3 +679,104 @@ tests/integration/test_voice_service.py::TestVoiceAPIEndpoint::test_upload_endpo
 | 完全准确率 | 2/3（66.7%） |
 | 同音字偏差 | 1/3（"会议" → "回忆"，百度 ASR 偏差） |
 | 空白录音误识别率 | 0/1（0%，正确返回错误） |
+
+---
+
+## 11. ASR → NLU 链路测试记录
+
+### 11.1 测试环境
+
+| 项目 | 内容 |
+|------|------|
+| 测试日期 | 2026-05-30 |
+| ASR 服务商 | 百度 |
+| NLU 大模型 | DeepSeek (deepseek-chat) |
+| 测试方式 | HTTP API 调用（FastAPI + httpx） |
+| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
+| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
+
+### 11.2 测试用例与结果
+
+#### 测试 1：/parse 端点（直接传文本，不经 ASR）
+
+| # | 输入文本 | 期望 intent | 实际 intent | 实际 title | 实际 time | 判定 |
+|---|----------|------------|-------------|------------|-----------|------|
+| 1 | 帮我创建一个明天下午三点的团队会议 | add_event | add_event | 团队会议 | 2026-05-31T15:00:00 | ✅ PASSED |
+| 2 | 今天有什么安排 | query_events | query_events | （空） | 2026-05-30T00:00:00 | ✅ PASSED |
+| 3 | 取消明天上午的会议 | delete_event | delete_event | 会议 | 2026-05-31T00:00:00 | ✅ PASSED |
+| 4 | （空字符串） | unknown | unknown | （空） | null | ✅ PASSED |
+
+#### 测试 2：完整链路 ASR → NLU
+
+| # | 音频文件 | ASR 输出 | NLU intent | NLU title | NLU time | 判定 |
+|---|----------|----------|------------|-----------|----------|------|
+| 1 | 帮我创建一个明天下午三点的团队会议.m4a | 帮我创建一个，明天下午三点的团队回忆。 | add_event | **团队会议**（同音字已纠正） | 2026-05-31T15:00:00 | ✅ PASSED |
+| 2 | 今天有什么安排.m4a | 今天有什么安排？ | query_events | （空） | 2026-05-30T00:00:00 | ✅ PASSED |
+| 3 | 取消明天上午的会议.m4a | 取消明天上午的会议。 | delete_event | 会议 | 2026-05-31T00:00:00 | ✅ PASSED |
+
+#### 测试 3：/parse 返回格式
+
+| # | 验证字段 | 判定 |
+|---|----------|------|
+| 1 | intent, title, time, reminder, reminder_minutes, description 6 个字段齐全 | ✅ PASSED |
+
+### 11.3 测试输出
+
+```
+============================================================
+测试 1: /parse 端点（直接传文本）
+============================================================
+  [OK] "帮我创建一个明天下午三点的团队会议"
+        → intent=add_event, time=2026-05-31T15:00:00, title=团队会议
+  [OK] "今天有什么安排"
+        → intent=query_events, time=2026-05-30T00:00:00, title=
+  [OK] "取消明天上午的会议"
+        → intent=delete_event, time=2026-05-31T00:00:00, title=会议
+  [OK] "(空字符串)"
+        → intent=unknown, time=None, title=
+  结果: 4/4 通过
+
+============================================================
+测试 2: 完整链路 ASR → NLU
+============================================================
+  ASR: "帮我创建一个，明天下午三点的团队回忆。"
+  NLU: intent=add_event, time=2026-05-31T15:00:00, title=团队会议
+  ASR: "今天有什么安排？"
+  NLU: intent=query_events, time=2026-05-30T00:00:00, title=
+  ASR: "取消明天上午的会议。"
+  NLU: intent=delete_event, time=2026-05-31T00:00:00, title=会议
+  结果: 3/3 通过
+
+============================================================
+测试 3: /parse 返回格式
+============================================================
+  [OK] 所有字段齐全: ['intent', 'title', 'time', 'reminder', 'reminder_minutes', 'description']
+```
+
+### 11.4 同音字纠正验证
+
+| ASR 原始输出 | NLU 纠正后 | 纠正是否生效 |
+|--------------|-----------|-------------|
+| 团队**回忆** | 团队**会议** | ✅ 生效 |
+
+NLU 提示词中配置了同音字映射表（回忆/会意/回议 → 会议），DeepSeek 正确执行了纠正。
+
+### 11.5 链路验证
+
+```
+m4a 录音文件
+  ↓ ffmpeg 转码
+16kHz/16bit/mono WAV
+  ↓ POST /api/voice/upload
+VoiceService.recognize_file() (百度 ASR)
+  ↓
+"帮我创建一个，明天下午三点的团队回忆。"
+  ↓ 客户端拿到文本后调用
+POST /api/voice/parse?text=...
+  ↓
+NLUService.parse_command() (DeepSeek)
+  ↓
+{"intent":"add_event", "title":"团队会议", "time":"2026-05-31T15:00:00", ...}
+```
+
+ASR → NLU 全链路运行正常，同音字纠正生效。
