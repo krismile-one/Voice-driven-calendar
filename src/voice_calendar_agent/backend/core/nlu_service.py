@@ -12,8 +12,34 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# 中文星期，用于在提示词里告诉大模型“今天是周几”
+# 中文星期，用于在提示词里告诉大模型"今天是周几"
 _WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+
+_nlu_service_instance: Optional["NLUService"] = None
+
+
+def get_nlu_service(settings=None) -> "NLUService":
+    """
+    获取NLU解析服务单例
+
+    输入：
+        settings: 应用配置对象（可选，首次调用时需要）
+    输出：
+        NLUService - NLU解析服务实例
+    """
+    global _nlu_service_instance
+    if _nlu_service_instance is None:
+        if settings is None:
+            from voice_calendar_agent.config import Settings
+
+            settings = Settings()
+        _nlu_service_instance = NLUService(
+            provider=settings.LLM_PROVIDER,
+            api_key=settings.LLM_API_KEY,
+            model=settings.LLM_MODEL,
+            base_url=settings.LLM_BASE_URL,
+        )
+    return _nlu_service_instance
 
 
 class LLMProvider(Enum):
@@ -151,6 +177,14 @@ class NLUService:
 示例：
 输入："明天下午3点一刻开会，提前半小时提醒我"
 输出：{{"intent":"add_event","title":"开会","time":"{now.strftime('%Y-%m-%d')}T15:15:00","reminder":true,"reminder_minutes":30,"description":""}}
+
+语音识别可能产生同音字错误，请根据日历场景语义自动修正 title 中的错误：
+- "回忆""会意""回议" → "会议"
+- "灰机""飞及" → "飞机"
+- "周灰""周辉""周惠" → "周会"
+- "活东""活洞" → "活动"
+- "面试"常为正确词，不要随意修改
+如果 title 中出现了明显的同音字错误，请替换为正确的词汇。
 
 用户的话：{text}"""
 
