@@ -35,6 +35,14 @@ except ImportError:
     HAS_WEBSOCKET_CLIENT = False
     logger.warning("websocket-client 未安装，讯飞语音识别不可用")
 
+try:
+    import pyaudio
+
+    HAS_PYAUDIO = True
+except ImportError:
+    HAS_PYAUDIO = False
+    logger.warning("pyaudio 未安装，录音功能不可用")
+
 
 # ========== 常量 ==========
 
@@ -173,7 +181,136 @@ class VoiceService:
             callback: 识别到文本后的回调函数，参数为识别结果文本
         输出：无
         """
-        pass
+        if not HAS_PYAUDIO:
+            raise ImportError("pyaudio 未安装，请运行: uv add pyaudio")
+
+        if self.is_listening:
+            logger.warning("已经在监听中")
+            return
+
+        self.is_listening = True
+        self._callback = callback
+
+        # 录音参数
+        self._chunk = 4096
+        self._format = pyaudio.paInt16
+        self._channels = 1
+        self._rate = 16000
+
+        # 静音检测参数
+        self._silence_threshold = 500    # RMS 阈值，低于此值认为是静音
+        self._silence_chunks_limit = 15  # 连续静音帧数（约 1.5 秒）后判定一句话结束
+        self._max_duration = 55          # 最大录音时长（秒），百度限制 60 秒
+
+        # 状态
+        self._audio_buffer = bytearray()
+        self._silence_chunks = 0
+        self._is_speaking = False
+        self._stream = None
+        self._pa = None
+
+        # 启动录音线程
+        self._listen_thread = threading.Thread(target=self._listen_loop, daemon=True)
+        self._listen_thread.start()
+        logger.info("开始持续监听")
+
+    def _listen_loop(self):
+        """录音主循环"""
+        try:
+            self._pa = pyaudio.PyAudio()
+            self._stream = self._pa.open(
+                format=self._format,
+                channels=self._channels,
+                rate=self._rate,
+                input=True,
+                frames_per_buffer=self._chunk,
+            )
+
+            start_time = time.time()
+
+            while self.is_listening:
+                try:
+                    data = self._stream.read(self._chunk, exception_on_overflow=False)
+                except Exception:
+                    continue
+
+                rms = self._calculate_rms(data)
+
+                if rms >= self._silence_threshold:
+                    # 检测到语音
+                    self._is_speaking = True
+                    self._silence_chunks = 0
+                    self._audio_buffer.extend(data)
+
+                    # 检查是否超长
+                    elapsed = time.time() - start_time
+                    if elapsed >= self._max_duration:
+                        self._process_buffer()
+                        start_time = time.time()
+
+                elif self._is_speaking:
+                    # 语音中的静音
+                    self._silence_chunks += 1
+                    self._audio_buffer.extend(data)
+
+                    if self._silence_chunks >= self._silence_chunks_limit:
+                        self._process_buffer()
+                        start_time = time.time()
+
+            # 停止时处理剩余音频
+            if self._audio_buffer:
+                self._process_buffer()
+
+        except Exception as e:
+            logger.error(f"录音异常: {e}")
+        finally:
+            self._cleanup_audio()
+
+    def _calculate_rms(self, data: bytes) -> float:
+        """计算音频数据的 RMS（均方根）用于静音检测"""
+        if not data:
+            return 0
+        count = len(data) // 2
+        shorts = struct.unpack(f"<{count}h", data[:count * 2])
+        sum_sq = sum(s * s for s in shorts)
+        return (sum_sq / count) ** 0.5 if count > 0 else 0
+
+    def _process_buffer(self):
+        """处理累积的音频缓冲，调用 ASR 识别"""
+        if len(self._audio_buffer) < self._rate:  # 少于 1 秒的音频忽略
+            self._audio_buffer.clear()
+            self._is_speaking = False
+            self._silence_chunks = 0
+            return
+
+        audio_data = bytes(self._audio_buffer)
+        self._audio_buffer.clear()
+        self._is_speaking = False
+        self._silence_chunks = 0
+
+        try:
+            text = self._get_engine().recognize_audio_data(audio_data)
+            if text and self._callback:
+                logger.info(f"识别结果: {text}")
+                self._callback(text)
+        except Exception as e:
+            logger.error(f"ASR 识别失败: {e}")
+
+    def _cleanup_audio(self):
+        """清理录音资源"""
+        if self._stream:
+            try:
+                self._stream.stop_stream()
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+        if self._pa:
+            try:
+                self._pa.terminate()
+            except Exception:
+                pass
+            self._pa = None
 
     def stop_listening(self):
         """
@@ -182,7 +319,10 @@ class VoiceService:
         输入：无
         输出：无
         """
-        pass
+        if not self.is_listening:
+            return
+        self.is_listening = False
+        logger.info("停止监听")
 
     def recognize_file(self, audio_path: str) -> str:
         """

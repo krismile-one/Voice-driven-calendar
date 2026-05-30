@@ -45,6 +45,7 @@ class NLUResponse(BaseModel):
     - intent: 意图类型 (add_event/delete_event/update_event/query_events/unknown)
     - title: 事件标题
     - time: ISO8601绝对时间字符串
+    - time_range: 时间段 (morning/afternoon/evening/day)
     - reminder: 是否提醒
     - reminder_minutes: 提前提醒分钟数
     - description: 事件描述
@@ -53,6 +54,7 @@ class NLUResponse(BaseModel):
     intent: str
     title: Optional[str] = None
     time: Optional[str] = None
+    time_range: str = "day"
     reminder: bool = True
     reminder_minutes: int = 0
     description: Optional[str] = None
