@@ -6,12 +6,12 @@
 
 | # | 测试类别 | 测试文件 | 测试数 | 状态 | 耗时 | 通过率 | 最后测试时间 |
 |---|----------|----------|--------|------|------|--------|-------------|
-| 1 | 单元测试 - 日历服务 | `tests/unit/test_calendar_service.py` | 4 | ⬜ 未实现（stub） | - | - | - |
+| 1 | 单元测试 - 日历服务 | `tests/unit/test_calendar_service.py` | 4 | ✅已完成 | 0.09s| 4/4(100%) | 2026-5-30 |
 | 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 4 | ✅ 已完成 | 0.89s | 4/4(100%) | 2026-05-30 |
 | 3 | 单元测试 - 时间解析 | `tests/unit/test_time_parser.py` | 3 | ⬜ 未实现（stub） | - | - | - |
 | 4 | 集成测试 - 事件API | `tests/integration/test_api_events.py` | 4 | ⬜ 未实现（stub） | - | - | - |
 | 5 | 集成测试 - 语音识别 | `tests/integration/test_voice_service.py` | 7 | ✅ 已完成 | 4.03s | 7/7 (100%) | 2026-05-30 |
-| 6 | 端到端测试 | `tests/e2e/test_full_flow.py` | 2 | ⬜ 未实现（stub） | - | - | - |
+| 6 | 端到端测试 | `tests/e2e/test_full_flow.py` | 2 | ✅ 已完成 | 7.09s | 2/2 (100%) | 2026-05-30 |
 | 7 | 语音准确率测试 | `tests/voice/test_accuracy.py` | 1 | ⬜ 文件不存在 | - | - | - |
 | 8 | 性能测试 | `tests/performance/test_response_time.py` | 2 | ⬜ 文件不存在 | - | - | - |
 | 9 | 集成测试 - ASR→NLU链路 | `test_pipeline.py` | 9 | ✅ 已完成 | - | 9/9 (100%) | 2026-05-30 |
@@ -780,3 +780,86 @@ NLUService.parse_command() (DeepSeek)
 ```
 
 ASR → NLU 全链路运行正常，同音字纠正生效。
+
+---
+
+## 12. 端到端测试记录（录音 → 日历操作）
+
+### 12.1 测试环境
+
+| 项目 | 内容 |
+|------|------|
+| 测试日期 | 2026-05-30 |
+| 测试方式 | pytest + FastAPI TestClient（无需启动服务） |
+| ASR 服务商 | 百度 |
+| NLU 大模型 | DeepSeek (deepseek-chat) |
+| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
+| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
+| 数据库 | SQLite 测试实例（每个测试函数独立） |
+
+### 12.2 测试用例与结果
+
+#### test_voice_to_event_flow（语音添加事件）
+
+| 步骤 | 操作 | 输入 | 输出 | 判定 |
+|------|------|------|------|------|
+| 1 | ffmpeg 转码 | 帮我创建一个明天上午10点的周会.m4a | 16kHz WAV | ✅ |
+| 2 | ASR 识别 | WAV 文件 | "帮我创建一个，明天上午十点的周会。" | ✅ |
+| 3 | NLU 解析 | "帮我创建一个，明天上午十点的周会。" | intent=add_event, title=周会, time=2026-05-31T10:00:00 | ✅ |
+| 4 | 执行创建 | NLUResponse | "已添加事件：周会", id=1 | ✅ |
+| 5 | 验证 | GET /api/events | events 中包含"周会" | ✅ |
+
+#### test_query_and_delete_flow（语音查询 + 删除事件）
+
+| 步骤 | 操作 | 输入 | 输出 | 判定 |
+|------|------|------|------|------|
+| 0 | 前置 | 语音添加"周会"事件 | 事件创建成功 | ✅ |
+| 1 | ASR 查询 | 今天有什么安排.m4a | "今天有什么安排？" | ✅ |
+| 2 | NLU 解析 | "今天有什么安排？" | intent=query_events, time=2026-05-30T00:00:00 | ✅ |
+| 3 | 执行查询 | NLUResponse | "该时间段没有事件"（查询今天） | ✅ |
+| 4 | ASR 删除 | 取消明天上午的周会.m4a | "取消明天上午的周会。" | ✅ |
+| 5 | NLU 解析 | "取消明天上午的周会。" | intent=delete_event, title=周会 | ✅ |
+| 6 | 执行删除 | NLUResponse | "已删除事件：周会", id=1 | ✅ |
+| 7 | 验证 | GET /api/events | events 中不含"周会" | ✅ |
+
+### 12.3 测试输出
+
+```
+tests/e2e/test_full_flow.py::TestFullFlow::test_voice_to_event_flow PASSED
+tests/e2e/test_full_flow.py::TestFullFlow::test_query_and_delete_flow PASSED
+
+2 passed, 14 warnings in 7.09s
+```
+
+### 12.4 Warnings 汇总
+
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| StarletteDeprecationWarning | 1 | httpx 与 starlette.testclient 兼容性警告 |
+| PydanticDeprecatedSince20 | 1 | Settings 使用 class-based config |
+| DeprecationWarning (on_event) | 3 | FastAPI on_event 已废弃，建议改用 lifespan |
+| DeprecationWarning (timeout) | 3 | TestClient 不应使用 timeout 参数 |
+
+以上 warnings 均不影响功能，属于现有代码的兼容性提示。
+
+### 12.5 全链路验证
+
+```
+m4a 录音文件
+  ↓ ffmpeg 转码
+16kHz/16bit/mono WAV
+  ↓ POST /api/voice/upload
+VoiceService.recognize_file() (百度 ASR)
+  ↓
+"帮我创建一个，明天上午十点的周会。"
+  ↓ POST /api/voice/parse
+NLUService.parse_command() (DeepSeek)
+  ↓
+{"intent":"add_event", "title":"周会", "time":"2026-05-31T10:00:00", ...}
+  ↓ POST /api/events/execute
+CalendarService.add_event() (SQLite)
+  ↓
+事件写入数据库，返回 {"message":"已添加事件：周会", "id":1}
+```
+
+全链路 `录音 → ASR → NLU → 日历操作` 运行正常，无异常中断。
