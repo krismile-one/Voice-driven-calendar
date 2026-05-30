@@ -1,654 +1,42 @@
 # 语音日历助手 - 测试文档
 
-## 0. 测试总览
+> 最后更新：2026-05-30
 
-### 测试进度表
+## 测试总览
 
-| # | 测试类别 | 测试文件 | 测试数 | 状态 | 耗时 | 通过率 | 最后测试时间 |
-|---|----------|----------|--------|------|------|--------|-------------|
-| 1 | 单元测试 - 日历服务 | `tests/unit/test_calendar_service.py` | 4 | ✅已完成 | 0.09s| 4/4(100%) | 2026-5-30 |
-| 2 | 单元测试 - NLU服务 | `tests/unit/test_nlu_service.py` | 4 | ✅ 已完成 | 0.89s | 4/4(100%) | 2026-05-30 |
-| 3 | 单元测试 - 时间解析 | `tests/unit/test_time_parser.py` | 3 | ⬜ 未实现（stub） | - | - | - |
-| 4 | 集成测试 - 事件API | `tests/integration/test_api_events.py` | 4 | ⬜ 未实现（stub） | - | - | - |
-| 5 | 集成测试 - 语音识别 | `tests/integration/test_voice_service.py` | 7 | ✅ 已完成 | 4.03s | 7/7 (100%) | 2026-05-30 |
-| 6 | 端到端测试 | `tests/e2e/test_full_flow.py` | 2 | ✅ 已完成 | 7.09s | 2/2 (100%) | 2026-05-30 |
-| 7 | 语音准确率测试 | `tests/voice/test_accuracy.py` | 1 | ⬜ 文件不存在 | - | - | - |
-| 8 | 性能测试 | `tests/performance/test_response_time.py` | 2 | ⬜ 文件不存在 | - | - | - |
-| 9 | 集成测试 - ASR→NLU链路 | `test_pipeline.py` | 9 | ✅ 已完成 | - | 9/9 (100%) | 2026-05-30 |
-| 10 | 端到端 - 语音三级链路 | `tests/e2e/test_voice_pipeline.py` | 9 | ✅ 已完成 | 13.57s | 9/9 (100%) | 2026-05-30 |
-| 11 | 实时测试 | `live_test.py` | 手动 | ✅ 已完成 | - | - | 2026-05-30 |
+| # | 测试类别 | 测试文件 | 数量 | 通过 | 耗时 |
+|---|----------|----------|------|------|------|
+| 1 | 单元测试 - 日历服务 | tests/unit/test_calendar_service.py | 4 | 4/4 | 0.09s |
+| 2 | 单元测试 - NLU服务 | tests/unit/test_nlu_service.py | 4 | 4/4 | 0.89s |
+| 3 | 单元测试 - 时间解析 | tests/unit/test_time_parser.py | 3 | ⬜ 未实现 | - |
+| 4 | 集成测试 - 事件API | tests/integration/test_api_events.py | 4 | ⬜ 未实现 | - |
+| 5 | 集成测试 - 语音识别 | tests/integration/test_voice_service.py | 7 | 7/7 | 4.03s |
+| 6 | 端到端测试 | tests/e2e/test_full_flow.py | 2 | 2/2 | 7.09s |
+| 7 | ASR→NLU→日历三级链路 | tests/e2e/test_voice_pipeline.py | 9 | 9/9 | 13.57s |
+| 8 | 语音准确率测试 | tests/voice/test_accuracy.py | 1 | ⬜ 文件不存在 | - |
+| 9 | 性能测试 | tests/performance/test_response_time.py | 2 | ⬜ 文件不存在 | - |
 
-**图例：** ✅ 已完成且通过 ｜ ❌ 已完成但有失败 ｜ ⬜ 未实现
-
-### 已执行测试详情（集成测试 - 语音识别）
-
-| # | 测试方法 | 输入 | 判定 |
-|---|----------|------|------|
-| 1 | test_recognize_audio_add_event | 帮我创建一个明天下午三点的团队会议.m4a | ✅ PASSED |
-| 2 | test_recognize_audio_query_events | 今天有什么安排.m4a | ✅ PASSED |
-| 3 | test_recognize_audio_delete_event | 取消明天上午的会议.m4a | ✅ PASSED |
-| 4 | test_recognize_audio_silence | 空白录音.m4a | ✅ PASSED |
-| 5 | test_recognize_audio_data_returns_string | 1 秒静音 PCM | ✅ PASSED |
-| 6 | test_upload_endpoint_recognizes_text | 今天有什么安排.wav | ✅ PASSED |
-| 7 | test_upload_endpoint_returns_correct_format | 空 bytes WAV | ✅ PASSED |
-
-详细结果见 [第 10 节](#10-语音识别测试记录)。
+**已实现测试：26 个，全部通过。**
 
 ---
 
-## 1. 测试策略
-
-### 1.1 测试类型
-
-| 测试类型 | 范围 | 工具 | 优先级 |
-|----------|------|------|--------|
-| 单元测试 | 单个函数/模块 | pytest | P0 |
-| 集成测试 | 模块间交互 | pytest + httpx | P0 |
-| 端到端测试 | 完整流程 | pytest + 真实调用 | P1 |
-| 语音测试 | 语音识别准确率 | 手动 + 自动化 | P1 |
-
-### 1.2 测试覆盖率目标
-
-- 核心业务逻辑：80%+
-- API接口：90%+
-- 工具函数：90%+
-
----
-
-## 2. 测试环境
-
-### 2.1 依赖
-
-测试依赖已在 `pyproject.toml` 中配置为开发依赖：
-
-```toml
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.3",
-    "pytest-asyncio>=0.23.2",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.12.0",
-    "black>=23.12.0",
-    "isort>=5.13.0",
-    "ruff>=0.1.0",
-]
-```
-
-### 2.2 安装
-
-```bash
-# 安装开发依赖
-uv sync --extra dev
-```
-
-### 2.3 测试配置
-
-```python
-# tests/conftest.py
-
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from src.backend.main import app
-from src.backend.models.database import Base, get_db
-
-# 测试数据库
-TEST_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(TEST_DATABASE_URL)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-@pytest.fixture(scope="function")
-def db_session():
-    """每个测试函数独立的数据库会话"""
-    Base.metadata.create_all(bind=engine)
-    session = TestingSessionLocal()
-    yield session
-    session.close()
-    Base.metadata.drop_all(bind=engine)
-
-@pytest.fixture(scope="function")
-def client(db_session):
-    """测试客户端"""
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
-```
-
----
-
-## 3. 单元测试
-
-### 3.1 日历服务测试
-
-```python
-# tests/unit/test_calendar_service.py
-
-import pytest
-from datetime import datetime, timedelta
-from src.backend.core.calendar_service import CalendarService
-
-class TestCalendarService:
-    def test_add_event(self, db_session):
-        """测试添加事件"""
-        service = CalendarService(db_session)
-        event = service.add_event(
-            title="测试会议",
-            start_time=datetime.now() + timedelta(days=1)
-        )
-        assert event.id is not None
-        assert event.title == "测试会议"
-
-    def test_delete_event(self, db_session):
-        """测试删除事件"""
-        service = CalendarService(db_session)
-        event = service.add_event(
-            title="待删除会议",
-            start_time=datetime.now() + timedelta(days=1)
-        )
-        result = service.delete_event(event.id)
-        assert result is True
-        assert service.get_events() == []
-
-    def test_get_events_by_date(self, db_session):
-        """测试按日期查询事件"""
-        service = CalendarService(db_session)
-        today = datetime.now()
-        tomorrow = today + timedelta(days=1)
-
-        service.add_event(title="今天会议", start_time=today)
-        service.add_event(title="明天会议", start_time=tomorrow)
-
-        events = service.get_events(date=today, range="day")
-        assert len(events) == 1
-        assert events[0].title == "今天会议"
-
-    def test_update_event(self, db_session):
-        """测试更新事件"""
-        service = CalendarService(db_session)
-        event = service.add_event(
-            title="原标题",
-            start_time=datetime.now()
-        )
-        updated = service.update_event(event.id, title="新标题")
-        assert updated.title == "新标题"
-```
-
-### 3.2 NLU服务测试
-
-```python
-# tests/unit/test_nlu_service.py
-
-import pytest
-from unittest.mock import patch, MagicMock
-from src.backend.core.nlu_service import NLUService
-
-class TestNLUService:
-    @patch('src.backend.core.nlu_service.OpenAI')
-    def test_parse_add_event(self, mock_openai):
-        """测试解析添加事件指令"""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '''
-        {
-            "intent": "add_event",
-            "title": "团队会议",
-            "time": "下午3点",
-            "date": "明天"
-        }
-        '''
-        mock_openai.return_value.chat.completions.create.return_value = mock_response
-
-        service = NLUService(api_key="test")
-        result = service.parse_command("帮我创建一个明天下午3点的团队会议")
-
-        assert result["intent"] == "add_event"
-        assert result["title"] == "团队会议"
-
-    @patch('src.backend.core.nlu_service.OpenAI')
-    def test_parse_query_events(self, mock_openai):
-        """测试解析查询事件指令"""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '''
-        {
-            "intent": "query_events",
-            "date": "今天"
-        }
-        '''
-        mock_openai.return_value.chat.completions.create.return_value = mock_response
-
-        service = NLUService(api_key="test")
-        result = service.parse_command("今天有什么安排")
-
-        assert result["intent"] == "query_events"
-```
-
-### 3.3 时间解析测试
-
-```python
-# tests/unit/test_time_parser.py
-
-import pytest
-from datetime import datetime, timedelta
-from src.backend.utils.time_parser import TimeParser
-
-class TestTimeParser:
-    def test_parse_tomorrow(self):
-        """测试解析'明天'"""
-        parser = TimeParser()
-        result = parser.parse("明天下午3点")
-        expected = datetime.now().replace(hour=15, minute=0, second=0) + timedelta(days=1)
-        assert result.date() == expected.date()
-        assert result.hour == 15
-
-    def test_parse_next_week(self):
-        """测试解析'下周'"""
-        parser = TimeParser()
-        result = parser.parse("下周三上午10点")
-        assert result.weekday() == 2  # 周三
-        assert result.hour == 10
-
-    def test_parse_today(self):
-        """测试解析'今天'"""
-        parser = TimeParser()
-        result = parser.parse("今天下午5点")
-        assert result.date() == datetime.now().date()
-        assert result.hour == 17
-```
-
----
-
-## 4. 集成测试
-
-### 4.1 API接口测试
-
-```python
-# tests/integration/test_api_events.py
-
-import pytest
-from datetime import datetime, timedelta
-
-class TestEventsAPI:
-    def test_create_event(self, client):
-        """测试创建事件API"""
-        response = client.post("/api/events", json={
-            "title": "测试会议",
-            "start_time": (datetime.now() + timedelta(days=1)).isoformat(),
-            "reminder": True,
-            "reminder_minutes": 15
-        })
-        assert response.status_code == 201
-        data = response.json()
-        assert data["title"] == "测试会议"
-        assert "id" in data
-
-    def test_get_events(self, client):
-        """测试获取事件列表API"""
-        # 先创建事件
-        client.post("/api/events", json={
-            "title": "会议1",
-            "start_time": datetime.now().isoformat()
-        })
-        client.post("/api/events", json={
-            "title": "会议2",
-            "start_time": datetime.now().isoformat()
-        })
-
-        # 查询
-        response = client.get("/api/events")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["total"] == 2
-
-    def test_delete_event(self, client):
-        """测试删除事件API"""
-        # 先创建事件
-        create_response = client.post("/api/events", json={
-            "title": "待删除会议",
-            "start_time": datetime.now().isoformat()
-        })
-        event_id = create_response.json()["id"]
-
-        # 删除
-        response = client.delete(f"/api/events/{event_id}")
-        assert response.status_code == 200
-
-        # 验证已删除
-        get_response = client.get("/api/events")
-        assert get_response.json()["total"] == 0
-
-    def test_update_event(self, client):
-        """测试更新事件API"""
-        # 先创建事件
-        create_response = client.post("/api/events", json={
-            "title": "原标题",
-            "start_time": datetime.now().isoformat()
-        })
-        event_id = create_response.json()["id"]
-
-        # 更新
-        response = client.put(f"/api/events/{event_id}", json={
-            "title": "新标题"
-        })
-        assert response.status_code == 200
-        assert response.json()["title"] == "新标题"
-```
-
-### 4.2 语音识别集成测试
-
-```python
-# tests/integration/test_voice_service.py
-
-import pytest
-import os
-from src.backend.core.voice_service import VoiceService
-
-class TestVoiceService:
-    @pytest.fixture
-    def voice_service(self):
-        """初始化语音服务"""
-        model_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-cn-0.22")
-        return VoiceService(model_path)
-
-    def test_recognize_audio_file(self, voice_service):
-        """测试识别音频文件"""
-        # 准备测试音频文件
-        test_audio = "tests/fixtures/test_audio.wav"
-        if os.path.exists(test_audio):
-            result = voice_service.recognize_file(test_audio)
-            assert isinstance(result, str)
-            assert len(result) > 0
-
-    @pytest.mark.skipif(
-        not os.path.exists("models/vosk/vosk-model-small-cn-0.22"),
-        reason="Vosk模型未下载"
-    )
-    def test_real_time_recognition(self, voice_service):
-        """测试实时识别（需要麦克风）"""
-        # 此测试需要手动验证
-        pass
-```
-
----
-
-## 5. 端到端测试
-
-### 5.1 完整流程测试
-
-```python
-# tests/e2e/test_full_flow.py
-
-import pytest
-from datetime import datetime, timedelta
-
-class TestFullFlow:
-    def test_voice_to_event_flow(self, client):
-        """测试完整流程：语音 → 文本 → 事件"""
-        # 1. 模拟语音识别结果
-        voice_text = "帮我创建一个明天下午3点的团队会议"
-
-        # 2. 调用NLU解析（使用mock）
-        # 3. 调用创建事件API
-        response = client.post("/api/events", json={
-            "title": "团队会议",
-            "start_time": (datetime.now() + timedelta(days=1)).replace(hour=15).isoformat()
-        })
-        assert response.status_code == 201
-
-        # 4. 验证事件已创建
-        get_response = client.get("/api/events")
-        events = get_response.json()["events"]
-        assert any(e["title"] == "团队会议" for e in events)
-
-    def test_query_and_delete_flow(self, client):
-        """测试查询和删除流程"""
-        # 1. 创建事件
-        client.post("/api/events", json={
-            "title": "临时会议",
-            "start_time": datetime.now().isoformat()
-        })
-
-        # 2. 查询事件
-        get_response = client.get("/api/events")
-        event_id = get_response.json()["events"][0]["id"]
-
-        # 3. 删除事件
-        delete_response = client.delete(f"/api/events/{event_id}")
-        assert delete_response.status_code == 200
-
-        # 4. 验证已删除
-        final_response = client.get("/api/events")
-        assert final_response.json()["total"] == 0
-```
-
----
-
-## 6. 语音识别准确率测试
-
-### 6.1 测试数据集
-
-```python
-# tests/fixtures/voice_test_cases.py
-
-VOICE_TEST_CASES = [
-    {
-        "input_audio": "test_add_meeting.wav",
-        "expected_text": "帮我创建一个明天下午3点的团队会议",
-        "expected_intent": "add_event",
-        "expected_title": "团队会议"
-    },
-    {
-        "input_audio": "test_query_today.wav",
-        "expected_text": "今天有什么安排",
-        "expected_intent": "query_events"
-    },
-    {
-        "input_audio": "test_delete_meeting.wav",
-        "expected_text": "取消明天的会议",
-        "expected_intent": "delete_event"
-    }
-]
-```
-
-### 6.2 准确率计算
-
-```python
-# tests/voice/test_accuracy.py
-
-import pytest
-from tests.fixtures.voice_test_cases import VOICE_TEST_CASES
-
-class TestVoiceAccuracy:
-    def test_recognition_accuracy(self, voice_service, nlu_service):
-        """测试整体识别准确率"""
-        correct = 0
-        total = len(VOICE_TEST_CASES)
-
-        for case in VOICE_TEST_CASES:
-            # 1. 语音识别
-            text = voice_service.recognize_file(case["input_audio"])
-
-            # 2. NLU解析
-            result = nlu_service.parse_command(text)
-
-            # 3. 验证
-            if result["intent"] == case["expected_intent"]:
-                if case["expected_intent"] == "add_event":
-                    if case["expected_title"] in result.get("title", ""):
-                        correct += 1
-                else:
-                    correct += 1
-
-        accuracy = correct / total
-        assert accuracy >= 0.7, f"识别准确率低于70%: {accuracy:.2%}"
-```
-
----
-
-## 7. 性能测试
-
-### 7.1 响应时间测试
-
-```python
-# tests/performance/test_response_time.py
-
-import pytest
-import time
-
-class TestResponseTime:
-    def test_api_response_time(self, client):
-        """测试API响应时间"""
-        start = time.time()
-        client.get("/api/events")
-        end = time.time()
-
-        response_time = end - start
-        assert response_time < 0.5, f"API响应时间超过500ms: {response_time:.2f}s"
-
-    def test_nlu_response_time(self, nlu_service):
-        """测试NLU解析响应时间"""
-        start = time.time()
-        nlu_service.parse_command("帮我创建一个明天下午3点的会议")
-        end = time.time()
-
-        response_time = end - start
-        assert response_time < 2.0, f"NLU响应时间超过2s: {response_time:.2f}s"
-```
-
----
-
-## 8. 测试运行
-
-### 8.1 运行所有测试
-
-```bash
-# 使用uv运行测试（推荐）
-uv run pytest
-
-# 运行并生成覆盖率报告
-uv run pytest --cov=src --cov-report=html
-
-# 运行特定类型的测试
-uv run pytest tests/unit/          # 单元测试
-uv run pytest tests/integration/   # 集成测试
-uv run pytest tests/e2e/           # 端到端测试
-
-# 运行代码质量检查
-uv run black src/ tests/           # 代码格式化
-uv run isort src/ tests/           # import排序
-uv run ruff check src/ tests/      # lint检查
-```
-
-### 8.2 测试报告
-
-```bash
-# 生成HTML测试报告
-uv run pytest --html=reports/test_report.html
-
-# 生成JUnit XML报告（用于CI）
-uv run pytest --junitxml=reports/test_results.xml
-```
-
----
-
-## 9. CI/CD集成
-
-### 9.1 GitHub Actions配置
-
-```yaml
-# .github/workflows/test.yml
-
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        version: "latest"
-
-    - name: Set up Python
-      run: uv python install ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: uv sync --extra dev
-
-    - name: Run tests
-      run: uv run pytest --cov=src --cov-report=xml
-
-    - name: Upload coverage
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-
-    - name: Set up Python
-      run: uv python install 3.11
-
-    - name: Install dependencies
-      run: uv sync --extra dev
-
-    - name: Run linting
-      run: |
-        uv run ruff check src/ tests/
-        uv run black --check src/ tests/
-        uv run isort --check-only src/ tests/
-```
-
----
-
-## 10. 语音识别测试记录
-
-### 10.1 测试环境
-
-| 项目 | 内容 |
-|------|------|
-| 测试日期 | 2026-05-30 |
-| Python 版本 | 3.11.15 |
-| pytest 版本 | 9.0.3 |
-| ASR 服务商 | 百度 |
-| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
-| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
-
-### 10.2 测试用例与结果
-
-| # | 测试方法 | 输入 | 预期结果 | 实际结果 | 判定 |
-|---|----------|------|----------|----------|------|
-| 1 | test_recognize_audio_add_event | 帮我创建一个明天下午三点的团队会议.m4a | 返回字符串，包含关键词 | "帮我创建一个，明天下午三点的团队**回忆**。" | ✅ PASSED |
-| 2 | test_recognize_audio_query_events | 今天有什么安排.m4a | 返回字符串，包含"安排" | "今天有什么安排？" | ✅ PASSED |
-| 3 | test_recognize_audio_delete_event | 取消明天上午的会议.m4a | 返回字符串，包含"取消"或"会议" | "取消明天上午的会议。" | ✅ PASSED |
-| 4 | test_recognize_audio_silence | 空白录音.m4a | 抛出 Exception | 3301 - speech quality error | ✅ PASSED |
-| 5 | test_recognize_audio_data_returns_string | 1 秒静音 PCM（struct 生成） | 抛出异常或返回空文本 | 返回空文本 | ✅ PASSED |
-| 6 | test_upload_endpoint_recognizes_text | 今天有什么安排.wav（经 ffmpeg 转换） | 状态码 200，响应含非空 text | text="今天有什么安排？" | ✅ PASSED |
-| 7 | test_upload_endpoint_returns_correct_format | 空 bytes WAV | 状态码 200，响应含 text 和 confidence | text="识别失败: ..." | ✅ PASSED |
-
-### 10.3 测试输出
+## 1. 集成测试 - 语音识别（7 个）
+
+**测试环境：** Python 3.11 / pytest 9.0.3 / 百度 ASR / 音频来自 `D:\Desktop\Voice-Driven-Calendar_VoiceTest\`
+
+### 测试用例与结果
+
+| # | 测试方法 | 输入 | 预期 | 实际 | 判定 |
+|---|----------|------|------|------|------|
+| 1 | test_recognize_audio_add_event | 帮我创建一个明天下午三点的团队会议.m4a | 返回文本，含关键词 | "帮我创建一个，明天下午三点的团队**回忆**。" | ✅ |
+| 2 | test_recognize_audio_query_events | 今天有什么安排.m4a | 返回文本，含"安排" | "今天有什么安排？" | ✅ |
+| 3 | test_recognize_audio_delete_event | 取消明天上午的会议.m4a | 返回文本，含"取消"或"会议" | "取消明天上午的会议。" | ✅ |
+| 4 | test_recognize_audio_silence | 空白录音.m4a | 抛出 Exception | 3301 - speech quality error | ✅ |
+| 5 | test_recognize_audio_data_returns_string | 1秒静音 PCM | 抛异常或返回空文本 | 返回空文本 | ✅ |
+| 6 | test_upload_endpoint_recognizes_text | 今天有什么安排.wav | 状态码 200，text非空 | text="今天有什么安排？" | ✅ |
+| 7 | test_upload_endpoint_returns_correct_format | 空 bytes WAV | 状态码 200，含 text 和 confidence | text="识别失败: ..." | ✅ |
+
+### 测试输出
 
 ```
 tests/integration/test_voice_service.py::TestVoiceServiceFileRecognition::test_recognize_audio_add_event PASSED
@@ -662,169 +50,82 @@ tests/integration/test_voice_service.py::TestVoiceAPIEndpoint::test_upload_endpo
 7 passed, 15 warnings in 4.03s
 ```
 
-### 10.4 Warnings 汇总
-
-| 类型 | 数量 | 说明 |
-|------|------|------|
-| PydanticDeprecatedSince20 | 1 | Settings 使用 class-based config，Pydantic V3 将移除 |
-| InsecureRequestWarning | 1 | 测试客户端使用未验证的 HTTPS |
-| StarletteDeprecationWarning | 1 | httpx 与 starlette.testclient 兼容性警告 |
-| DeprecationWarning (on_event) | 3 | FastAPI 的 on_event 已废弃，建议改用 lifespan |
-
-以上 warnings 均不影响功能，属于现有代码的兼容性提示。
-
-### 10.5 识别准确率统计
+### 识别准确率
 
 | 指标 | 结果 |
 |------|------|
 | 有效语音识别成功率 | 3/3（100%） |
 | 完全准确率 | 2/3（66.7%） |
 | 同音字偏差 | 1/3（"会议" → "回忆"，百度 ASR 偏差） |
-| 空白录音误识别率 | 0/1（0%，正确返回错误） |
+| 空白录音误识别率 | 0%（正确返回错误） |
 
 ---
 
-## 11. ASR → NLU 链路测试记录
+## 2. ASR → NLU 链路测试（4 + 3 + 1 个用例）
 
-### 11.1 测试环境
+**测试环境：** 百度 ASR + DeepSeek (deepseek-chat) / HTTP API 调用
 
-| 项目 | 内容 |
-|------|------|
-| 测试日期 | 2026-05-30 |
-| ASR 服务商 | 百度 |
-| NLU 大模型 | DeepSeek (deepseek-chat) |
-| 测试方式 | HTTP API 调用（FastAPI + httpx） |
-| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
-| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
-
-### 11.2 测试用例与结果
-
-#### 测试 1：/parse 端点（直接传文本，不经 ASR）
+### /parse 端点（直接传文本）
 
 | # | 输入文本 | 期望 intent | 实际 intent | 实际 title | 实际 time | 判定 |
 |---|----------|------------|-------------|------------|-----------|------|
-| 1 | 帮我创建一个明天下午三点的团队会议 | add_event | add_event | 团队会议 | 2026-05-31T15:00:00 | ✅ PASSED |
-| 2 | 今天有什么安排 | query_events | query_events | （空） | 2026-05-30T00:00:00 | ✅ PASSED |
-| 3 | 取消明天上午的会议 | delete_event | delete_event | 会议 | 2026-05-31T00:00:00 | ✅ PASSED |
-| 4 | （空字符串） | unknown | unknown | （空） | null | ✅ PASSED |
+| 1 | 帮我创建一个明天下午三点的团队会议 | add_event | add_event | 团队会议 | 2026-05-31T15:00:00 | ✅ |
+| 2 | 今天有什么安排 | query_events | query_events | （空） | 2026-05-30T00:00:00 | ✅ |
+| 3 | 取消明天上午的会议 | delete_event | delete_event | 会议 | 2026-05-31T00:00:00 | ✅ |
+| 4 | （空字符串） | unknown | unknown | （空） | null | ✅ |
 
-#### 测试 2：完整链路 ASR → NLU
+### 完整链路 ASR → NLU
 
-| # | 音频文件 | ASR 输出 | NLU intent | NLU title | NLU time | 判定 |
-|---|----------|----------|------------|-----------|----------|------|
-| 1 | 帮我创建一个明天下午三点的团队会议.m4a | 帮我创建一个，明天下午三点的团队回忆。 | add_event | **团队会议**（同音字已纠正） | 2026-05-31T15:00:00 | ✅ PASSED |
-| 2 | 今天有什么安排.m4a | 今天有什么安排？ | query_events | （空） | 2026-05-30T00:00:00 | ✅ PASSED |
-| 3 | 取消明天上午的会议.m4a | 取消明天上午的会议。 | delete_event | 会议 | 2026-05-31T00:00:00 | ✅ PASSED |
+| # | 音频文件 | ASR 输出 | NLU intent | NLU title | 判定 |
+|---|----------|----------|------------|-----------|------|
+| 1 | 帮我创建一个明天下午三点的团队会议.m4a | 帮我创建一个，明天下午三点的团队回忆。 | add_event | **团队会议**（同音字已纠正） | ✅ |
+| 2 | 今天有什么安排.m4a | 今天有什么安排？ | query_events | （空） | ✅ |
+| 3 | 取消明天上午的会议.m4a | 取消明天上午的会议。 | delete_event | 会议 | ✅ |
 
-#### 测试 3：/parse 返回格式
+### /parse 返回格式验证
 
-| # | 验证字段 | 判定 |
-|---|----------|------|
-| 1 | intent, title, time, reminder, reminder_minutes, description 6 个字段齐全 | ✅ PASSED |
+| 验证字段 | 判定 |
+|----------|------|
+| intent, title, time, reminder, reminder_minutes, description 6 字段齐全 | ✅ |
 
-### 11.3 测试输出
+### 同音字纠正
 
-```
-============================================================
-测试 1: /parse 端点（直接传文本）
-============================================================
-  [OK] "帮我创建一个明天下午三点的团队会议"
-        → intent=add_event, time=2026-05-31T15:00:00, title=团队会议
-  [OK] "今天有什么安排"
-        → intent=query_events, time=2026-05-30T00:00:00, title=
-  [OK] "取消明天上午的会议"
-        → intent=delete_event, time=2026-05-31T00:00:00, title=会议
-  [OK] "(空字符串)"
-        → intent=unknown, time=None, title=
-  结果: 4/4 通过
+| ASR 原始 | NLU 纠正 | 生效 |
+|----------|----------|------|
+| 团队**回忆** | 团队**会议** | ✅ |
 
-============================================================
-测试 2: 完整链路 ASR → NLU
-============================================================
-  ASR: "帮我创建一个，明天下午三点的团队回忆。"
-  NLU: intent=add_event, time=2026-05-31T15:00:00, title=团队会议
-  ASR: "今天有什么安排？"
-  NLU: intent=query_events, time=2026-05-30T00:00:00, title=
-  ASR: "取消明天上午的会议。"
-  NLU: intent=delete_event, time=2026-05-31T00:00:00, title=会议
-  结果: 3/3 通过
-
-============================================================
-测试 3: /parse 返回格式
-============================================================
-  [OK] 所有字段齐全: ['intent', 'title', 'time', 'reminder', 'reminder_minutes', 'description']
-```
-
-### 11.4 同音字纠正验证
-
-| ASR 原始输出 | NLU 纠正后 | 纠正是否生效 |
-|--------------|-----------|-------------|
-| 团队**回忆** | 团队**会议** | ✅ 生效 |
-
-NLU 提示词中配置了同音字映射表（回忆/会意/回议 → 会议），DeepSeek 正确执行了纠正。
-
-### 11.5 链路验证
-
-```
-m4a 录音文件
-  ↓ ffmpeg 转码
-16kHz/16bit/mono WAV
-  ↓ POST /api/voice/upload
-VoiceService.recognize_file() (百度 ASR)
-  ↓
-"帮我创建一个，明天下午三点的团队回忆。"
-  ↓ 客户端拿到文本后调用
-POST /api/voice/parse?text=...
-  ↓
-NLUService.parse_command() (DeepSeek)
-  ↓
-{"intent":"add_event", "title":"团队会议", "time":"2026-05-31T15:00:00", ...}
-```
-
-ASR → NLU 全链路运行正常，同音字纠正生效。
+> NLU prompt 中配置了同音字映射表（回忆/会意/回议 → 会议），DeepSeek 正确执行了纠正。
 
 ---
 
-## 12. 端到端测试记录（录音 → 日历操作）
+## 3. 端到端测试 - 语音到日历（2 个）
 
-### 12.1 测试环境
+**测试环境：** pytest + FastAPI TestClient / SQLite 测试实例（每个测试独立数据库）
 
-| 项目 | 内容 |
-|------|------|
-| 测试日期 | 2026-05-30 |
-| 测试方式 | pytest + FastAPI TestClient（无需启动服务） |
-| ASR 服务商 | 百度 |
-| NLU 大模型 | DeepSeek (deepseek-chat) |
-| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
-| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
-| 数据库 | SQLite 测试实例（每个测试函数独立） |
-
-### 12.2 测试用例与结果
-
-#### test_voice_to_event_flow（语音添加事件）
+### test_voice_to_event_flow（语音添加事件）
 
 | 步骤 | 操作 | 输入 | 输出 | 判定 |
 |------|------|------|------|------|
 | 1 | ffmpeg 转码 | 帮我创建一个明天上午10点的周会.m4a | 16kHz WAV | ✅ |
-| 2 | ASR 识别 | WAV 文件 | "帮我创建一个，明天上午十点的周会。" | ✅ |
-| 3 | NLU 解析 | "帮我创建一个，明天上午十点的周会。" | intent=add_event, title=周会, time=2026-05-31T10:00:00 | ✅ |
+| 2 | ASR 识别 | WAV | "帮我创建一个，明天上午十点的周会。" | ✅ |
+| 3 | NLU 解析 | ASR 文本 | intent=add_event, title=周会, time=2026-05-31T10:00:00 | ✅ |
 | 4 | 执行创建 | NLUResponse | "已添加事件：周会", id=1 | ✅ |
-| 5 | 验证 | GET /api/events | events 中包含"周会" | ✅ |
+| 5 | 验证 | GET /api/events | events 中含"周会" | ✅ |
 
-#### test_query_and_delete_flow（语音查询 + 删除事件）
+### test_query_and_delete_flow（语音查询+删除）
 
 | 步骤 | 操作 | 输入 | 输出 | 判定 |
 |------|------|------|------|------|
-| 0 | 前置 | 语音添加"周会"事件 | 事件创建成功 | ✅ |
+| 0 | 前置 | 语音添加"周会" | 事件创建成功 | ✅ |
 | 1 | ASR 查询 | 今天有什么安排.m4a | "今天有什么安排？" | ✅ |
-| 2 | NLU 解析 | "今天有什么安排？" | intent=query_events, time=2026-05-30T00:00:00 | ✅ |
-| 3 | 执行查询 | NLUResponse | "该时间段没有事件"（查询今天） | ✅ |
+| 2 | NLU 解析 | ASR 文本 | intent=query_events, time=2026-05-30T00:00:00 | ✅ |
+| 3 | 执行查询 | NLUResponse | "该时间段没有事件"（今天无事件） | ✅ |
 | 4 | ASR 删除 | 取消明天上午的周会.m4a | "取消明天上午的周会。" | ✅ |
-| 5 | NLU 解析 | "取消明天上午的周会。" | intent=delete_event, title=周会 | ✅ |
+| 5 | NLU 解析 | ASR 文本 | intent=delete_event, title=周会 | ✅ |
 | 6 | 执行删除 | NLUResponse | "已删除事件：周会", id=1 | ✅ |
 | 7 | 验证 | GET /api/events | events 中不含"周会" | ✅ |
 
-### 12.3 测试输出
+### 测试输出
 
 ```
 tests/e2e/test_full_flow.py::TestFullFlow::test_voice_to_event_flow PASSED
@@ -833,81 +134,37 @@ tests/e2e/test_full_flow.py::TestFullFlow::test_query_and_delete_flow PASSED
 2 passed, 14 warnings in 7.09s
 ```
 
-### 12.4 Warnings 汇总
-
-| 类型 | 数量 | 说明 |
-|------|------|------|
-| StarletteDeprecationWarning | 1 | httpx 与 starlette.testclient 兼容性警告 |
-| PydanticDeprecatedSince20 | 1 | Settings 使用 class-based config |
-| DeprecationWarning (on_event) | 3 | FastAPI on_event 已废弃，建议改用 lifespan |
-| DeprecationWarning (timeout) | 3 | TestClient 不应使用 timeout 参数 |
-
-以上 warnings 均不影响功能，属于现有代码的兼容性提示。
-
-### 12.5 全链路验证
-
-```
-m4a 录音文件
-  ↓ ffmpeg 转码
-16kHz/16bit/mono WAV
-  ↓ POST /api/voice/upload
-VoiceService.recognize_file() (百度 ASR)
-  ↓
-"帮我创建一个，明天上午十点的周会。"
-  ↓ POST /api/voice/parse
-NLUService.parse_command() (DeepSeek)
-  ↓
-{"intent":"add_event", "title":"周会", "time":"2026-05-31T10:00:00", ...}
-  ↓ POST /api/events/execute
-CalendarService.add_event() (SQLite)
-  ↓
-事件写入数据库，返回 {"message":"已添加事件：周会", "id":1}
-```
-
-全链路 `录音 → ASR → NLU → 日历操作` 运行正常，无异常中断。
-
 ---
 
-## 13. 语音三级链路测试记录
+## 4. 语音三级链路测试（9 个）
 
-### 13.1 测试环境
+**测试环境：** pytest + FastAPI TestClient / 百度 ASR + DeepSeek
 
-| 项目 | 内容 |
-|------|------|
-| 测试日期 | 2026-05-30 |
-| 测试方式 | pytest + FastAPI TestClient |
-| ASR 服务商 | 百度 |
-| NLU 大模型 | DeepSeek (deepseek-chat) |
-| 测试音频来源 | `D:\Desktop\Voice-Driven-Calendar_VoiceTest\` |
-| 音频格式 | m4a（经 ffmpeg 转为 16kHz/16bit/mono WAV） |
-
-### 13.2 测试用例与结果
-
-#### Level 1：录音 → ASR 文本
+### Level 1：录音 → ASR 文本（3 个）
 
 | # | 测试方法 | 音频文件 | ASR 输出 | 断言 | 判定 |
 |---|----------|----------|----------|------|------|
-| 1 | test_asr_recognizes_add_event | 帮我创建一个明天上午10点的周会.m4a | 帮我创建一个，明天上午十点的周会。 | 含"周会" | ✅ PASSED |
-| 2 | test_asr_recognizes_query | 今天有什么安排.m4a | 今天有什么安排？ | 含"安排" | ✅ PASSED |
-| 3 | test_asr_recognizes_delete | 取消明天上午的周会.m4a | 取消明天上午的周会。 | 含"取消"或"周会" | ✅ PASSED |
+| 1 | test_asr_recognizes_add_event | 帮我创建一个明天上午10点的周会.m4a | 帮我创建一个，明天上午十点的周会。 | 含"周会" | ✅ |
+| 2 | test_asr_recognizes_query | 今天有什么安排.m4a | 今天有什么安排？ | 含"安排" | ✅ |
+| 3 | test_asr_recognizes_delete | 取消明天上午的周会.m4a | 取消明天上午的周会。 | 含"取消"或"周会" | ✅ |
 
-#### Level 2：录音 → ASR → NLU
+### Level 2：录音 → ASR → NLU（3 个）
 
 | # | 测试方法 | ASR 输出 | NLU intent | NLU title | 判定 |
 |---|----------|----------|------------|-----------|------|
-| 4 | test_nlu_parses_add_event | 帮我创建一个，明天上午十点的周会。 | add_event | 周会 | ✅ PASSED |
-| 5 | test_nlu_parses_query | 今天有什么安排？ | query_events | （空） | ✅ PASSED |
-| 6 | test_nlu_parses_delete | 取消明天上午的周会。 | delete_event | 周会 | ✅ PASSED |
+| 4 | test_nlu_parses_add_event | 帮我创建一个，明天上午十点的周会。 | add_event | 周会 | ✅ |
+| 5 | test_nlu_parses_query | 今天有什么安排？ | query_events | （空） | ✅ |
+| 6 | test_nlu_parses_delete | 取消明天上午的周会。 | delete_event | 周会 | ✅ |
 
-#### Level 3：录音 → ASR → NLU → 日历操作
+### Level 3：录音 → ASR → NLU → 日历操作（3 个）
 
 | # | 测试方法 | 操作 | 验证方式 | 判定 |
 |---|----------|------|----------|------|
-| 7 | test_voice_add_event | 语音添加事件 | GET /events 含"周会" | ✅ PASSED |
-| 8 | test_voice_query_event | 语音查询事件 | 返回消息含"事件" | ✅ PASSED |
-| 9 | test_voice_delete_event | 语音删除事件 | GET /events 不含"周会" | ✅ PASSED |
+| 7 | test_voice_add_event | 语音添加事件 | GET /events 含"周会" | ✅ |
+| 8 | test_voice_query_event | 语音查询事件 | 返回消息含"事件" | ✅ |
+| 9 | test_voice_delete_event | 语音删除事件 | GET /events 不含"周会" | ✅ |
 
-### 13.3 测试输出
+### 测试输出
 
 ```
 tests/e2e/test_voice_pipeline.py::TestVoiceToASR::test_asr_recognizes_add_event PASSED
@@ -923,88 +180,55 @@ tests/e2e/test_voice_pipeline.py::TestVoiceToCalendar::test_voice_delete_event P
 9 passed, 45 warnings in 13.57s
 ```
 
-### 13.4 链路验证
-
-```
-Level 1: m4a → ffmpeg → WAV → /upload → 文本
-Level 2: Level 1 + /parse → NLU 结构化 JSON
-Level 3: Level 2 + /execute → 日历操作 → 数据库
-```
-
-三级链路全部通过，覆盖 add_event / query_events / delete_event 三种意图。
-
 ---
 
-## 14. 实时语音测试记录
+## 5. 实时语音测试（手动）
 
-### 14.1 测试环境
+**测试方式：** `live_test.py` / 麦克风实时录音 / 静音检测（1.5秒静音自动截断）
 
-| 项目 | 内容 |
-|------|------|
-| 测试日期 | 2026-05-30 |
-| 测试方式 | live_test.py（麦克风实时录音） |
-| ASR 服务商 | 百度 |
-| NLU 大模型 | DeepSeek (deepseek-chat) |
-| 录音设备 | 系统默认麦克风 |
-| 录音参数 | 16kHz / 16bit / 单声道 / PyAudio |
-| 停止条件 | 静音检测（连续 1.5 秒静音）+ 外部 stop |
+| # | 用户说话 | 预期 intent | 预期执行结果 | 判定 |
+|---|----------|------------|-------------|------|
+| 1 | 帮我创建一个明天下午3点的团队会议 | add_event | 已添加事件 | ✅ |
+| 2 | 今天有什么安排 | query_events | 查询结果 | ✅ |
+| 3 | 取消明天的会议 | delete_event | 已删除事件 | ✅ |
 
-### 14.2 测试用例与结果
+> 实时测试结果受环境噪音、麦克风质量、网络延迟影响，每次可能不同。
 
-| # | 用户说话 | ASR 输出 | NLU intent | 执行结果 | 判定 |
-|---|----------|----------|------------|----------|------|
-| 1 | 帮我创建一个明天下午3点的团队会议 | （实际识别结果） | add_event | 已添加事件 | ✅ |
-| 2 | 今天有什么安排 | （实际识别结果） | query_events | 查询结果 | ✅ |
-| 3 | 取消明天的会议 | （实际识别结果） | delete_event | 已删除事件 | ✅ |
-
-> 实时测试结果受环境噪音、麦克风质量、网络延迟等因素影响，每次运行结果可能不同。
-
-### 14.3 测试流程
+### 测试输出示例
 
 ```
-终端 1: uv run python main.py --api
-终端 2: uv run python live_test.py
-
-输出:
 ========================================
   语音日历助手 - 实时测试
 ========================================
-  说话示例：
-    '帮我创建一个明天下午3点的团队会议'
-    '今天有什么安排'
-    '取消明天的会议'
-  按 Ctrl+C 停止
+按 Ctrl+C 停止
 ────────────────────────────────────────
-正在启动麦克风...
-
   [ASR]  帮我创建一个，明天下午3点的团队会议。
   [NLU]  intent=add_event, title=团队会议, time=2026-05-31T15:00:00
   [执行] 已添加事件：团队会议
-
 ────────────────────────────────────────
 继续说话，或按 Ctrl+C 停止...
-
-^C
-正在停止...
-已停止。
 ```
 
-### 14.4 工作原理
+---
 
-```
-麦克风 (PyAudio, 16kHz/16bit/mono)
-  ↓
-_listen_loop() 后台线程持续录音
-  ↓
-RMS 静音检测（阈值 500，连续 15 帧静音 ≈ 1.5 秒）
-  ↓
-累积音频 → engine.recognize_audio_data(PCM)
-  ↓
-callback(text) → on_recognized()
-  ↓
-POST /api/voice/parse (NLU) → POST /api/events/execute (日历)
-  ↓
-打印结果，继续监听下一句话
-```
+## 6. Warnings 汇总
 
-全链路 `麦克风录音 → ASR → NLU → 日历操作` 实时运行正常。
+| 类型 | 数量 | 说明 | 影响 |
+|------|------|------|------|
+| PydanticDeprecatedSince20 | 1 | Settings class-based config，Pydantic V3 将移除 | 无 |
+| InsecureRequestWarning | 1 | 测试客户端未验证 HTTPS | 无 |
+| StarletteDeprecationWarning | 1 | httpx 与 starlette.testclient 兼容性 | 无 |
+| DeprecationWarning (on_event) | 3 | FastAPI on_event 已废弃 | 无 |
+| DeprecationWarning (timeout) | 3 | TestClient 不应使用 timeout | 无 |
+
+---
+
+## 7. 测试命令
+
+```bash
+uv run pytest tests/ -v                          # 运行全部测试
+uv run pytest tests/unit/ -v                     # 单元测试
+uv run pytest tests/integration/ -v              # 集成测试
+uv run pytest tests/e2e/ -v                      # 端到端测试
+uv run pytest --cov=src --cov-report=html        # 覆盖率报告
+```
