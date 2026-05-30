@@ -173,12 +173,13 @@ class VoiceService:
         """
         pass
 
-    def start_listening(self, callback: Callable[[str], None]):
+    def start_listening(self, callback: Callable[[str], None], status_callback: Callable[[str], None] = None):
         """
         开始持续监听
 
         输入：
             callback: 识别到文本后的回调函数，参数为识别结果文本
+            status_callback: 状态变化回调，参数为状态字符串（listening/speaking/processing/done）
         输出：无
         """
         if not HAS_PYAUDIO:
@@ -190,6 +191,7 @@ class VoiceService:
 
         self.is_listening = True
         self._callback = callback
+        self._status_callback = status_callback
 
         # 录音参数
         self._chunk = 4096
@@ -227,6 +229,7 @@ class VoiceService:
             )
 
             start_time = time.time()
+            last_status = None
 
             while self.is_listening:
                 try:
@@ -238,6 +241,9 @@ class VoiceService:
 
                 if rms >= self._silence_threshold:
                     # 检测到语音
+                    if not self._is_speaking and self._status_callback:
+                        self._status_callback("speaking")
+                        last_status = "speaking"
                     self._is_speaking = True
                     self._silence_chunks = 0
                     self._audio_buffer.extend(data)
@@ -247,6 +253,9 @@ class VoiceService:
                     if elapsed >= self._max_duration:
                         self._process_buffer()
                         start_time = time.time()
+                        if self._status_callback:
+                            self._status_callback("listening")
+                            last_status = "listening"
 
                 elif self._is_speaking:
                     # 语音中的静音
@@ -256,6 +265,13 @@ class VoiceService:
                     if self._silence_chunks >= self._silence_chunks_limit:
                         self._process_buffer()
                         start_time = time.time()
+                        if self._status_callback:
+                            self._status_callback("listening")
+                            last_status = "listening"
+
+                elif self._status_callback and last_status != "listening":
+                    self._status_callback("listening")
+                    last_status = "listening"
 
             # 停止时处理剩余音频
             if self._audio_buffer:
@@ -284,17 +300,26 @@ class VoiceService:
             return
 
         audio_data = bytes(self._audio_buffer)
+        duration_sec = len(audio_data) / (self._rate * 2)  # 16bit mono
         self._audio_buffer.clear()
         self._is_speaking = False
         self._silence_chunks = 0
 
         try:
+            if self._status_callback:
+                self._status_callback(f"processing:{duration_sec:.1f}")
             text = self._get_engine().recognize_audio_data(audio_data)
+            if self._status_callback:
+                self._status_callback("done")
             if text and self._callback:
                 logger.info(f"识别结果: {text}")
                 self._callback(text)
+            elif self._status_callback:
+                self._status_callback("no_result")
         except Exception as e:
             logger.error(f"ASR 识别失败: {e}")
+            if self._status_callback:
+                self._status_callback(f"error:{e}")
 
     def _cleanup_audio(self):
         """清理录音资源"""
