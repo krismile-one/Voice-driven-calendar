@@ -15,6 +15,7 @@ from voice_calendar_agent.config import Settings
 from voice_calendar_agent.backend.models.database import init_db
 from voice_calendar_agent.backend.api.events import router as events_router
 from voice_calendar_agent.backend.api.voice import router as voice_router
+from voice_calendar_agent.backend.api.weather import router as weather_router
 
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,11 @@ class Application:
             voice_router,
             prefix="/api/voice",
             tags=["语音识别"],
+        )
+        self.fastapi_app.include_router(
+            weather_router,
+            prefix="/api",
+            tags=["天气信息"],
         )
 
         # ── 前端静态文件服务 ──
