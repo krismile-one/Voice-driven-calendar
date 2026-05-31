@@ -95,8 +95,30 @@ uv sync
 cp .env.example .env        # Windows: copy .env.example .env
 #   编辑 .env，填入 ASR_API_KEY 和 LLM_API_KEY（见下方配置说明）
 
-# 3. 运行
+# 3. 运行（本地开发 — 默认 HTTP，localhost 下麦克风可用）
 uv run python main.py --api      # API 服务模式（FastAPI，端口 8000）
+
+# 4. 运行（服务器部署 — 启用 HTTPS，否则浏览器阻止麦克风）
+uv run python main.py --api --ssl   # 自动生成自签名证书 + HTTPS
+```
+
+> **⚠️ 麦克风权限**：浏览器只允许在 `localhost` 或 `HTTPS` 下使用麦克风（安全上下文）。
+> 如果你部署到服务器并通过 `http://IP:8000` 访问，录音功能会失效。
+> 解决方法：启动时加 `--ssl` 自动生成自签名证书，然后通过 `https://IP:8000` 访问。
+
+### 生产部署（HTTPS）
+
+```bash
+# 方式一：自签名证书（内网 / 开发用）
+uv run python main.py --api --ssl
+# → 自动在 data/ssl/ 生成证书，访问 https://<服务器IP>:8000
+# 浏览器会提示"不安全"，点击"高级 → 继续访问"即可
+
+# 方式二：指定已有证书
+uv run python main.py --api --ssl-certfile /path/to/fullchain.pem --ssl-keyfile /path/to/privkey.pem
+
+# 方式三：Nginx 反向代理（推荐生产环境）
+# Nginx 处理 SSL 终止 → 反代到 localhost:8000（无需 --ssl）
 ```
 
 ## ⚙️ 配置说明（.env）
@@ -112,6 +134,7 @@ uv run python main.py --api      # API 服务模式（FastAPI，端口 8000）
 | `LLM_MODEL` | 模型名，如 `deepseek-chat` |
 | `LLM_BASE_URL` | API 基础地址，如 `https://api.deepseek.com` |
 | `HOST` / `PORT` | API 服务监听地址与端口 |
+| `SSL_CERTFILE` / `SSL_KEYFILE` | SSL 证书/私钥路径（可在 .env 中预设，省去每次传参） |
 | `REMINDER_CHECK_INTERVAL` | 提醒检查间隔（秒），默认 60 |
 
 > 需要自行申请的密钥：**百度语音**（在线 ASR）与 **DeepSeek 等大模型**（NLU）。真实 `.env` 不会提交到仓库。

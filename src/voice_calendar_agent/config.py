@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     # 服务配置
     HOST: str = Field(default="0.0.0.0", description="服务监听地址")
     PORT: int = Field(default=8000, description="服务监听端口")
+    SSL_CERTFILE: str = Field(
+        default="",
+        description="SSL 证书文件路径（.pem），用于启用 HTTPS"
+    )
+    SSL_KEYFILE: str = Field(
+        default="",
+        description="SSL 私钥文件路径（.pem），用于启用 HTTPS"
+    )
 
     # 提醒配置
     REMINDER_CHECK_INTERVAL: int = Field(

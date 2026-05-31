@@ -99,19 +99,25 @@ class Application:
             """应用关闭时清理资源"""
             logger.info("正在清理资源...")
 
-    def run(self):
+    def run(self, ssl_certfile=None, ssl_keyfile=None):
         """
         启动应用
 
-        输入：无
+        输入：
+            ssl_certfile: SSL 证书文件路径（可选，用于 HTTPS）
+            ssl_keyfile:  SSL 私钥文件路径（可选，用于 HTTPS）
         输出：无
         """
-        logger.info(f"启动服务: {self.settings.HOST}:{self.settings.PORT}")
-        uvicorn.run(
-            self.fastapi_app,
-            host=self.settings.HOST,
-            port=self.settings.PORT,
-        )
+        protocol = "https" if (ssl_certfile and ssl_keyfile) else "http"
+        logger.info(f"启动服务: {protocol}://{self.settings.HOST}:{self.settings.PORT}")
+
+        kwargs = dict(host=self.settings.HOST, port=self.settings.PORT)
+        if ssl_certfile and ssl_keyfile:
+            kwargs["ssl_certfile"] = ssl_certfile
+            kwargs["ssl_keyfile"] = ssl_keyfile
+            logger.info("已启用 HTTPS（SSL 证书已加载）")
+
+        uvicorn.run(self.fastapi_app, **kwargs)
 
 
 def create_app(settings: Settings) -> Application:
