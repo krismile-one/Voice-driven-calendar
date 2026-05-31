@@ -48,7 +48,7 @@ const SPECIAL_DATES = {
   // 三月
   // ════════════════════════════════════════════
   "2026-03-05": { type: "term",    name: "惊蛰",     image: "images/24_jieqi/3_惊蛰.png" },
-  "2026-03-08": { type: "term",    name: "妇女节",    image: "images/节日/妇女节.png" },
+  "2026-03-08": { type: "holiday", name: "妇女节",    image: "images/jieri/妇女节.png" },
   "2026-03-20": { type: "term",    name: "春分",     image: "images/24_jieqi/4_春分.png" },
 
   // ════════════════════════════════════════════
