@@ -8,7 +8,7 @@ import json
 import logging
 from enum import Enum
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -159,16 +159,21 @@ class NLUService:
         now = datetime.now()
         now_str = now.strftime("%Y-%m-%dT%H:%M:%S")
         weekday = _WEEKDAYS[now.weekday()]
+        tomorrow_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
         return f"""你是日历指令解析助手。当前时间是 {now_str}（{weekday}）。
 请把用户的一句话解析成 JSON，只输出 JSON，不要 markdown、不要任何解释。
 
 字段说明：
 - intent: 意图，取值 add_event / delete_event / update_event / query_events / unknown
-- title: 事件标题；删除或查询时填关键词，可为空字符串
+- title: 事件标题。规则：
+        · 添加事件(add_event)时，填具体事件名（"开会"、"看电影"等）
+        · 删除/查询时：
+          - 用户说**具体事件类型**（"会议"、"面试"、"飞机"、"约会"等）→ 填进 title，用于模糊匹配
+          - 用户说**泛指词**（"事情"、"事"、"日程"、"安排"、"计划"、"东西"、"内容"）→ title 填**空字符串 ""**，表示"那一天的全部事件"
 - time: ISO8601 绝对时间字符串，如 "2026-05-30T15:15:00"。
         把"明天""下周三""三点一刻(=15分)""下午三点"等换算成绝对时间；
-        查询某一天但没有具体时刻时，用当天的 00:00:00；
+        查询/删除某一天但没有具体时刻时，用当天的 00:00:00；
         完全没有时间则填 null
 - time_range: 时间段，取值 morning(上午) / afternoon(下午) / evening(晚上) / day(全天)。
         用户说"上午"则 morning，"下午"则 afternoon，"晚上"则 evening；
@@ -177,13 +182,21 @@ class NLUService:
 - reminder_minutes: 提前多少分钟提醒，整数，没提到则填 0
 - description: 备注说明，没有则空字符串
 
-示例 1（具体时间）：
+示例 1（添加，具体时间）：
 输入："明天下午3点一刻开会，提前半小时提醒我"
-输出：{{"intent":"add_event","title":"开会","time":"{now.strftime('%Y-%m-%d')}T15:15:00","time_range":"day","reminder":true,"reminder_minutes":30,"description":""}}
+输出：{{"intent":"add_event","title":"开会","time":"{tomorrow_str}T15:15:00","time_range":"day","reminder":true,"reminder_minutes":30,"description":""}}
 
-示例 2（时间段查询）：
+示例 2（查询，时间段）：
 输入："明天上午有哪些事情"
-输出：{{"intent":"query_events","title":"","time":"{(now.replace(day=now.day+1)).strftime('%Y-%m-%d')}T00:00:00","time_range":"morning","reminder":false,"reminder_minutes":0,"description":""}}
+输出：{{"intent":"query_events","title":"","time":"{tomorrow_str}T00:00:00","time_range":"morning","reminder":false,"reminder_minutes":0,"description":""}}
+
+示例 3（删除，带具体关键词）：
+输入："删除明天的会议"
+输出：{{"intent":"delete_event","title":"会议","time":"{tomorrow_str}T00:00:00","time_range":"day","reminder":false,"reminder_minutes":0,"description":""}}
+
+示例 4（删除，泛指词代表全部）：
+输入："删除明天的事情"
+输出：{{"intent":"delete_event","title":"","time":"{tomorrow_str}T00:00:00","time_range":"day","reminder":false,"reminder_minutes":0,"description":""}}
 
 语音识别可能产生同音字错误，请根据日历场景语义自动修正 title 中的错误：
 - "回忆""会意""回议" → "会议"
