@@ -109,7 +109,46 @@ src/voice_calendar_agent/
 tests/ — 17 条测试全部通过
 ```
 
-## 修复记录
+### NLU 跨月日期溢出修复（2026-05-31）
+
+**问题**：每月最后一天（31日/28日/30日）NLU 解析必然崩溃，报 `day is out of range for month`。语音识别成功、文本正确，但 parse 阶段直接抛异常。
+
+**根因**：`nlu_service.py#L186` 提示词示例 2 用了 `now.replace(day=now.day+1)` 计算"明天"的日期。当今天是 5 月 31 日时，`now.day+1 = 32`，`datetime.replace(day=32)` 在 5 月只有 31 天的情况下抛出 `ValueError`。虽然异常被 `parse_command()` 的 `except` 兜底捕获并降级为 `unknown`，但导致整个 NLU 链中断。
+
+**场景复现**：
+
+```
+当前日期: 2026-05-31
+执行路径: startRecording → upload → parse → _build_prompt
+崩溃点:   now.replace(day=31+1) → day=32 → ValueError("day is out of range for month")
+影响范围: 每月 28/29/30/31 日 — 所有触发"明天"相关提示词的请求
+```
+
+**为什么语音识别成功但 NLU 失败？**
+
+```
+语音链路:  浏览器录音 → ffmpeg 转码 → 百度 ASR → 文本 ✅ 成功
+NLU 链路:  文本 → _build_prompt → 构建示例时 now.replace(day=32) → 💥
+```
+
+两条链路独立，ASR 正常返回文本后，NLU 在构建提示词阶段就崩了，根本没到调用大模型那一步。
+
+**修复方案**：
+
+| # | 位置 | 旧代码 | 新代码 | 说明 |
+|---|------|--------|--------|------|
+| 1 | `nlu_service.py` L12 | `from datetime import datetime` | `from datetime import datetime, timedelta` | 引入 timedelta |
+| 2 | `nlu_service.py` L186 | `now.replace(day=now.day+1)` | `(now + timedelta(days=1))` | 用标准日期运算替代手动 replace |
+
+`timedelta` 会正确处理跨月/跨年/闰年，不会出现非法日期。
+
+**教训总结**：
+
+- `datetime.replace(day=...)` 对越界值不安全，**永远用 `datetime + timedelta(days=N)` 做日期加减**
+- 提示词中的动态示例也会成为崩溃点 — 示例不是"死文字"，里面的 Python 代码照样会执行
+- 跨月边界是典型盲区 — 开发时恰好是 30 号，没触发 31 号的 bug；需要刻意在月末/年初/2 月底测试
+
+### 修复记录
 
 | 日期 | 问题 | 修改文件 | 修改内容 |
 |------|------|----------|----------|
@@ -119,6 +158,42 @@ tests/ — 17 条测试全部通过
 | 05-31 | 数据库为空无法验证前端 | 临时脚本 | Python 注入 8 条测试事件（5月3条 + 6月5条） |
 | 05-31 | jieri 图片 `.jpg` 引用实际为 `.png` | `special_dates.js` | 6 处扩展名修正 |
 | 05-31 | 浏览器 webm/opus → 百度 ASR 格式不匹配 | `voice.py` | 新增 ffmpeg 转码层（webm→16kHz PCM WAV） |
+| 05-31 | 服务器部署后麦克风被浏览器阻止 | `config.py`, `app.py`, `main.py`, `index.html` 等 7 个文件 | 新增 `--ssl` 自签名证书 + HTTPS 启动 |
+| 05-31 | 每月最后一天 NLU 崩溃：`now.replace(day=32)` 跨月溢出 | `nlu_service.py` L12, L186 | `replace(day=day+1)` → `+ timedelta(days=1)` |
+
+### 服务器 HTTPS 部署修复（2026-05-31）
+
+**问题**：部署到服务器后，浏览器阻止麦克风 — `getUserMedia()` 仅在安全上下文（`localhost` 或 `https://`）下可用，通过 `http://IP:8000` 访问时 `navigator.mediaDevices` 不可用。
+
+**根因**：浏览器安全策略，非 localhost 的 HTTP 页面不是安全上下文。
+
+#### 修改文件
+
+| # | 文件 | 变更 | 说明 |
+|---|------|------|------|
+| 1 | `config.py` | 新增 `SSL_CERTFILE`、`SSL_KEYFILE` | 可在 `.env` 预设 SSL 路径 |
+| 2 | `app.py` | `run()` 新增 `ssl_certfile`/`ssl_keyfile` 参数 | 传给 uvicorn 启用 HTTPS |
+| 3 | `main.py` | 新增 `--ssl`、`--ssl-certfile`、`--ssl-keyfile` CLI 参数 | 三选一启用 HTTPS |
+| 4 | `utils/ssl_helper.py` | **新文件** | 纯 Python 自签名证书生成（cryptography），自动 fallback openssl |
+| 5 | `pyproject.toml` | 新增 `cryptography` 依赖 | 确保证书生成跨平台可用 |
+| 6 | `index.html` | 错误提示改用 `window.isSecureContext` | 动态显示正确 HTTPS 地址替代硬编码 localhost |
+| 7 | `README.md` | 新增"生产部署（HTTPS）"章节 | 三种部署方式 + 麦克风权限说明 |
+
+#### 使用方式
+
+```bash
+# 自动生成自签名证书并启动 HTTPS（内网 / 开发用）
+uv run python main.py --api --ssl
+# → 访问 https://<服务器IP>:8000
+# → 浏览器提示不安全 → ＂高级 → 继续访问＂即可
+
+# 指定已有证书
+uv run python main.py --api --ssl-certfile cert.pem --ssl-keyfile key.pem
+
+# .env 预设（省去每次传参）
+SSL_CERTFILE=/path/to/cert.pem
+SSL_KEYFILE=/path/to/key.pem
+```
 
 ## 测试结果
 

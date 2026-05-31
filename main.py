@@ -7,7 +7,9 @@
 
 使用方式：
     uv run python main.py              # 默认启动终端模式
-    uv run python main.py --api        # 启动API服务模式
+    uv run python main.py --api        # 启动API服务模式 (HTTP)
+    uv run python main.py --api --ssl  # 启动API服务模式 (HTTPS，自动生成自签名证书)
+    uv run python main.py --api --ssl-certfile cert.pem --ssl-keyfile key.pem  # 指定证书
     uv run python main.py --terminal   # 启动终端模式
 """
 
@@ -44,6 +46,23 @@ def main():
         action="store_true",
         help="启动终端交互模式（默认）",
     )
+    parser.add_argument(
+        "--ssl-certfile",
+        type=str,
+        default=None,
+        help="SSL 证书文件路径（.pem），用于 HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-keyfile",
+        type=str,
+        default=None,
+        help="SSL 私钥文件路径（.pem），用于 HTTPS",
+    )
+    parser.add_argument(
+        "--ssl",
+        action="store_true",
+        help="自动生成自签名证书并启用 HTTPS（开发/内网部署用）",
+    )
     args = parser.parse_args()
 
     # 配置日志
@@ -60,8 +79,20 @@ def main():
         if args.api:
             # 启动API服务模式
             logger.info("启动API服务模式...")
+
+            # 处理 SSL 参数
+            ssl_certfile = args.ssl_certfile or settings.SSL_CERTFILE or None
+            ssl_keyfile = args.ssl_keyfile or settings.SSL_KEYFILE or None
+
+            # --ssl: 自动生成自签名证书
+            if args.ssl and (not ssl_certfile or not ssl_keyfile):
+                from voice_calendar_agent.utils.ssl_helper import generate_self_signed_cert
+                cert_path, key_path = generate_self_signed_cert()
+                ssl_certfile = cert_path
+                ssl_keyfile = key_path
+
             app = create_app(settings)
-            app.run()
+            app.run(ssl_certfile=ssl_certfile, ssl_keyfile=ssl_keyfile)
         else:
             # 启动终端交互模式（默认）
             logger.info("启动终端交互模式...")
