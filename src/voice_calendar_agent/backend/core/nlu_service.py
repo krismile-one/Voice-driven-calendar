@@ -8,7 +8,7 @@ import json
 import logging
 from enum import Enum
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,7 @@ class NLUService:
 
 示例 2（时间段查询）：
 输入："明天上午有哪些事情"
-输出：{{"intent":"query_events","title":"","time":"{(now.replace(day=now.day+1)).strftime('%Y-%m-%d')}T00:00:00","time_range":"morning","reminder":false,"reminder_minutes":0,"description":""}}
+输出：{{"intent":"query_events","title":"","time":"{(now + timedelta(days=1)).strftime('%Y-%m-%d')}T00:00:00","time_range":"morning","reminder":false,"reminder_minutes":0,"description":""}}
 
 语音识别可能产生同音字错误，请根据日历场景语义自动修正 title 中的错误：
 - "回忆""会意""回议" → "会议"
