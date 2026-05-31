@@ -410,8 +410,8 @@ VoiceRecognizeResponse(text="...")
 
 ## 七、待完善
 
-- [ ] 实现录音功能（PyAudio 采集麦克风）
-- [ ] 实现 NLU 解析服务（parse_command）
+- [✅] 实现录音功能（PyAudio 采集麦克风）
+- [✅] 实现 NLU 解析服务（parse_command）
 - [ ] 实现 Vosk 离线识别模式
-- [ ] 增加 m4a 格式直接识别支持（跳过 SDK 格式校验）
+- [✅] 增加 m4a 格式直接识别支持（跳过 SDK 格式校验）
 - [ ] WebSocket /stream 端点改为真正的实时流（逐段识别）

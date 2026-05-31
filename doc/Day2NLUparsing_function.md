@@ -265,9 +265,9 @@ test_parse_invalid_returns_unknown . PASSED
 
 ## 七、待完善 / 与协作者对接
 
-- [ ] 实现 `time_parser.py`：把 NLU 输出的 ISO 字符串转成 `datetime` 对象 + 兜底
-- [ ] 真 API 端到端验证：拿到 DeepSeek/Claude 密钥后跑 `test_nlu.py`，记录真实识别准确率
-- [ ] 与上游对接：`voice_service` 识别出的文字 → `parse_command(text)`
-- [ ] 与下游对接：`parse_command` 返回的 dict → `calendar_service.add_event(...)`（`time` 已是 ISO，下游直接转 datetime）
+- [不需要] 实现 `time_parser.py`：把 NLU 输出的 ISO 字符串转成 `datetime` 对象 + 兜底
+- [✅] 真 API 端到端验证：拿到 DeepSeek/Claude 密钥后跑 `test_nlu.py`，记录真实识别准确率
+- [✅] 与上游对接：`voice_service` 识别出的文字 → `parse_command(text)`
+- [✅] 与下游对接：`parse_command` 返回的 dict → `calendar_service.add_event(...)`（`time` 已是 ISO，下游直接转 datetime）
 - [ ] 多轮对话：支持"把刚才那个会改到四点"这类上下文修改
-- [ ] 复述确认：解析结果回显确认后再落库
+- [✅] 复述确认：解析结果回显确认后再落库

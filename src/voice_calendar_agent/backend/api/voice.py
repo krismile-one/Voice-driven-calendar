@@ -126,6 +126,11 @@ async def upload_audio(audio: UploadFile = File(...)):
     try:
         audio_bytes = await audio.read()
 
+        # 空文件检查
+        if not audio_bytes or len(audio_bytes) < 100:
+            logger.warning(f"音频数据过小: {len(audio_bytes) if audio_bytes else 0} bytes")
+            return VoiceRecognizeResponse(text="识别失败: 未录制到有效音频，请重试并确保说话时长 > 1 秒", confidence=None)
+
         suffix = ".webm"
         if audio.filename:
             ext = os.path.splitext(audio.filename)[1]
@@ -134,7 +139,19 @@ async def upload_audio(audio: UploadFile = File(...)):
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(audio_bytes)
+            tmp.flush()
+            os.fsync(tmp.fileno())
             tmp_path = tmp.name
+
+        logger.info(f"收到音频: {len(audio_bytes)} bytes, 格式 {suffix}")
+
+        # 检查 webm EBML header（1A 45 DF A3），损坏文件直接拒绝
+        if suffix.lower() in (".webm", ".weba"):
+            with open(tmp_path, "rb") as f:
+                magic = f.read(4)
+            if magic != b"\x1a\x45\xdf\xa3":
+                logger.warning(f"无效的 webm 文件，magic bytes: {magic.hex()}, 大小: {len(audio_bytes)}")
+                return VoiceRecognizeResponse(text="识别失败: 录音数据不完整，请重试", confidence=None)
 
         # 非 WAV/PCM 格式（如 webm/opus）需用 ffmpeg 转码
         recognize_path = tmp_path

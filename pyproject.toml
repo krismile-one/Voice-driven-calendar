@@ -25,6 +25,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "chardet>=7.4.3",
     "pyaudio>=0.2.14",
+    "cryptography>=41.0.0",
 ]
 
 [project.optional-dependencies]
