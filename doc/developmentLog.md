@@ -120,6 +120,40 @@ tests/ — 17 条测试全部通过
 | 05-31 | jieri 图片 `.jpg` 引用实际为 `.png` | `special_dates.js` | 6 处扩展名修正 |
 | 05-31 | 浏览器 webm/opus → 百度 ASR 格式不匹配 | `voice.py` | 新增 ffmpeg 转码层（webm→16kHz PCM WAV） |
 
+### 服务器 HTTPS 部署修复（2026-05-31）
+
+**问题**：部署到服务器后，浏览器阻止麦克风 — `getUserMedia()` 仅在安全上下文（`localhost` 或 `https://`）下可用，通过 `http://IP:8000` 访问时 `navigator.mediaDevices` 不可用。
+
+**根因**：浏览器安全策略，非 localhost 的 HTTP 页面不是安全上下文。
+
+#### 修改文件
+
+| # | 文件 | 变更 | 说明 |
+|---|------|------|------|
+| 1 | `config.py` | 新增 `SSL_CERTFILE`、`SSL_KEYFILE` | 可在 `.env` 预设 SSL 路径 |
+| 2 | `app.py` | `run()` 新增 `ssl_certfile`/`ssl_keyfile` 参数 | 传给 uvicorn 启用 HTTPS |
+| 3 | `main.py` | 新增 `--ssl`、`--ssl-certfile`、`--ssl-keyfile` CLI 参数 | 三选一启用 HTTPS |
+| 4 | `utils/ssl_helper.py` | **新文件** | 纯 Python 自签名证书生成（cryptography），自动 fallback openssl |
+| 5 | `pyproject.toml` | 新增 `cryptography` 依赖 | 确保证书生成跨平台可用 |
+| 6 | `index.html` | 错误提示改用 `window.isSecureContext` | 动态显示正确 HTTPS 地址替代硬编码 localhost |
+| 7 | `README.md` | 新增"生产部署（HTTPS）"章节 | 三种部署方式 + 麦克风权限说明 |
+
+#### 使用方式
+
+```bash
+# 自动生成自签名证书并启动 HTTPS（内网 / 开发用）
+uv run python main.py --api --ssl
+# → 访问 https://<服务器IP>:8000
+# → 浏览器提示不安全 → ＂高级 → 继续访问＂即可
+
+# 指定已有证书
+uv run python main.py --api --ssl-certfile cert.pem --ssl-keyfile key.pem
+
+# .env 预设（省去每次传参）
+SSL_CERTFILE=/path/to/cert.pem
+SSL_KEYFILE=/path/to/key.pem
+```
+
 ## 测试结果
 
 | 类别 | 数量 | 通过 |
