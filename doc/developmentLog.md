@@ -238,3 +238,63 @@ if (!window.MediaRecorder) {
 | 6 | 团建活动 | 2026-06-05T09:00 | 18:00 | |
 | 7 | 牙医预约 | 2026-06-10T08:00 | 09:00 | |
 | 8 | 月度总结 | 2026-05-28T10:00 | 11:00 | 本月已过
+
+### 2026-05-31 前端 UI 优化 — 特殊日期、农历、背景系统
+
+**修改文件：**
+- `frontend/web/static/js/special_dates.js` — 修复节日图片扩展名 `.jpg` → `.png`
+- `frontend/web/index.html` — 多项 CSS / 模板 / JS 变更（~30 处编辑）
+
+**变更内容：**
+
+1. **默认渐变背景替换**
+   - `linear-gradient(135deg, #FF626E, #FFBE71)` → `linear-gradient(45deg, #BC95C6, #7DC4CC)`
+   - 45deg = 左下角 → 右上角
+
+2. **特殊日期背景样式调整**
+   - `background-size: cover` → `115%`（避免水印进入可视区）
+   - `background-position: center top` → `center center`
+
+3. **日历面板放大**
+   - `max-w-[480px]` → `max-w-[560px]`
+   - 日期格间距 `gap-0.5 md:gap-1` → `gap-1 md:gap-1.5`
+   - 日期数字 `text-base md:text-lg` → `text-lg md:text-xl`
+
+4. **日期数字严格居中**
+   - 新增 `.date-number` CSS 类：`display:flex; align-items:center; justify-content:center; height:1.35em`
+   - 数字与标签/农历完全解耦，高低不再偏移
+
+5. **农历功能集成**
+   - 引入 `tinylunar@1.0.2` (CDN: unpkg) 公历→农历转换
+   - 新增函数：
+     - `queryLunar(dateStr)` — 带缓存的农历查询
+     - `getLunarText(dateStr)` — 返回农历日（如"十五"），用于日期格
+     - `getLunarFullText(dateStr)` — 返回完整农历（如"四月十五"），用于日程详情
+   - 显示优先级：holiday > term > makeup > rest > 农历
+   - 日期格内无特殊标签时自动显示农历日期（`.lunar-text` 半透明白色）
+
+6. **日期格结构调整**
+   ```
+   日期数字（固定高度容器）
+   特殊标签 或 农历日期
+   事件红点标记
+   ```
+
+7. **当天自动显示背景**
+   - `onMounted` 中检测今天日期，若在 `SPECIAL_DATES` 中则自动 `switchBackground()`
+
+8. **日程详情增强**
+   - 新增农历日期行：`农历四月十五`
+   - 显示顺序：公历日期 → 星期 → 特殊标签 → 农历
+
+9. **图片扩展名修复**
+   - jieri 目录下所有图片为 `.png` 格式，`special_dates.js` 中引用已全部修正
+
+**已知问题：**
+- `国庆节.png` 缺失（jieri 目录中不存在），10月1日背景将静默回退到默认渐变
+
+**技术要点：**
+- `<script>` 改为 `<script type="module">` 以支持 ESM import
+- tinylunar CDN: `https://unpkg.com/tinylunar/dist/index.js` → 导出 `lunisolar`（小写）
+- 农历查询带内存缓存（`lunarCache`），避免重复计算
+- 图片加载失败通过 `img.onerror` 自动回退到默认渐变，无破损图标

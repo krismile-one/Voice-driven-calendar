@@ -6,6 +6,7 @@
   <title>语音日历助手</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/js/special_dates.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -18,16 +19,11 @@
     }
   </script>
   <style>
-    /* ── 背景渐变动画 ── */
+    /* ── 默认渐变动画 ── */
     @keyframes gradient-shift {
       0%   { background-position: 0% 50%; }
       50%  { background-position: 100% 50%; }
       100% { background-position: 0% 50%; }
-    }
-    .bg-animated {
-      background: linear-gradient(135deg, #0a0a14 0%, #111827 25%, #0f172a 50%, #0c0f1a 75%, #0a0a14 100%);
-      background-size: 400% 400%;
-      animation: gradient-shift 20s ease infinite;
     }
 
     /* ── 录音呼吸边框 ── */
@@ -37,6 +33,28 @@
     }
     .recording-overlay {
       animation: breathe 2.2s ease-in-out infinite;
+    }
+
+    /* ── 背景层：默认渐变 ── */
+    .bg-default-layer {
+      position: fixed; inset: 0; z-index: -2;
+      background: linear-gradient(45deg, #BC95C6 0%, #7DC4CC 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 20s ease infinite;
+    }
+
+    /* ── 背景层：特殊日期图片（叠加在默认渐变之上） ── */
+    .bg-special-layer {
+      position: fixed; inset: 0; z-index: -1;
+      background-size: 115%;
+      background-position: center center;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transition: opacity 0.6s ease-in-out;
+      pointer-events: none;
+    }
+    .bg-special-layer.visible {
+      opacity: 1;
     }
 
     /* ── 月份滑动过渡（前进：从右进入，向左退出） ── */
@@ -63,17 +81,73 @@
     .list-enter-from   { opacity: 0; transform: translateX(16px); }
     .list-leave-to     { opacity: 0; transform: translateX(-16px); }
 
-    /* ── 日历卡片 tilt 过渡（鼠标离开时平滑回正） ── */
+    /* ── 日历卡片 tilt 过渡 ── */
     .tilt-transition {
       transition: transform 0.4s ease-out;
     }
 
     /* ── 日期格子 hover 效果 ── */
     .date-cell:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.08);
     }
     .date-cell.today:hover {
       background: rgba(250, 204, 21, 0.2);
+    }
+
+    /* ── 日期数字容器（固定高度，与标签解耦） ── */
+    .date-number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 1.35em;
+      line-height: 1;
+    }
+
+    /* ── 特殊日期标签 ── */
+    .date-label {
+      font-size: 9px;
+      line-height: 1;
+      padding: 1px 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+      letter-spacing: 0.5px;
+    }
+    @media (min-width: 768px) {
+      .date-label { font-size: 10px; padding: 1.5px 5px; }
+    }
+
+    /* ── 农历文本 ── */
+    .lunar-text {
+      font-size: 9px;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.35);
+      white-space: nowrap;
+    }
+    @media (min-width: 768px) {
+      .lunar-text { font-size: 10px; }
+    }
+
+    /* ── 事件数量红点标记 ── */
+    .event-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.85);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    @media (min-width: 768px) {
+      .event-badge {
+        min-width: 18px;
+        height: 18px;
+        font-size: 11px;
+      }
     }
 
     /* ── 自定义滚动条 ── */
@@ -89,7 +163,13 @@
     }
   </style>
 </head>
-<body class="bg-animated min-h-screen text-white antialiased">
+<body class="min-h-screen text-white antialiased">
+  <!-- ════════════════════════════════════════════ -->
+  <!-- 背景层（双层结构）                             -->
+  <!-- ════════════════════════════════════════════ -->
+  <div class="bg-default-layer"></div>
+  <div id="bg-special" class="bg-special-layer"></div>
+
   <div id="app">
     <!-- ════════════════════════════════════════════ -->
     <!-- 背景点击捕获层 (z-0)                         -->
@@ -134,7 +214,7 @@
         <!-- ── 液态玻璃卡片 ── -->
         <div
           ref="tiltCard"
-          class="bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-2xl p-3 md:p-6 select-none w-[94vw] max-w-[400px]"
+          class="bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-2xl p-3 md:p-6 select-none w-[94vw] max-w-[560px]"
         >
           <!-- ── 月份导航 ── -->
           <div class="flex items-center justify-between mb-4 px-1">
@@ -167,43 +247,47 @@
             :name="state.slideDirection === 'next' ? 'slide-next' : 'slide-prev'"
             mode="out-in"
           >
-            <div :key="state.monthKey" class="grid grid-cols-7 gap-0.5 md:gap-1">
+            <div :key="state.monthKey" class="grid grid-cols-7 gap-1 md:gap-1.5">
               <div
                 v-for="(cell, idx) in flatCells"
                 :key="idx"
                 class="date-cell aspect-square flex flex-col items-center justify-center rounded-lg cursor-pointer transition-colors relative"
                 :class="getCellClasses(cell)"
                 @click="handleDateClick(cell)"
+                @mouseenter="handleCellHover(cell)"
+                @mouseleave="handleCellLeave"
               >
-                <!-- 日期数字 -->
+                <!-- 日期数字（固定高度容器，与标签解耦） -->
                 <span
-                  class="text-sm md:text-base leading-none"
-                  :class="cell.isCurrentMonth ? 'text-white/75' : 'text-white/20'"
+                  class="date-number"
+                  :class="[cell.isCurrentMonth ? 'text-white/75' : 'text-white/20', 'text-lg md:text-xl']"
                 >{{ cell.day }}</span>
 
-                <!-- 事件圆点标记 -->
-                <div
-                  v-if="getCellEvents(cell.dateStr).length > 0"
-                  class="flex gap-[2px] mt-[3px]"
-                >
-                  <span
-                    v-for="(dot, di) in getCellDots(cell.dateStr)"
-                    :key="di"
-                    class="w-1 md:w-1.5 h-1 md:h-1.5 rounded-full inline-block"
-                    :class="di < 3 ? 'bg-blue-400/80' : 'bg-blue-400/40'"
-                  ></span>
-                  <span
-                    v-if="getCellEvents(cell.dateStr).length > 4"
-                    class="text-[8px] md:text-[10px] text-white/30 leading-none"
-                  >+{{ getCellEvents(cell.dateStr).length - 4 }}</span>
-                </div>
+                <!-- 特殊日期标签（仅当前月；优先于农历） -->
+                <span
+                  v-if="cell.isCurrentMonth && getSpecialLabel(cell.dateStr)"
+                  class="date-label"
+                  :class="getLabelColorClass(cell.dateStr)"
+                >{{ getSpecialLabel(cell.dateStr) }}</span>
+
+                <!-- 农历日期（仅当前月；无特殊标签时显示） -->
+                <span
+                  v-else-if="cell.isCurrentMonth"
+                  class="lunar-text"
+                >{{ getLunarText(cell.dateStr) }}</span>
+
+                <!-- 事件数量红点标记 -->
+                <span
+                  v-if="cell.isCurrentMonth && getCellEvents(cell.dateStr).length > 0"
+                  class="event-badge"
+                >{{ getCellEvents(cell.dateStr).length }}</span>
 
               </div>
             </div>
           </Transition>
 
           <!-- ── 实时时钟 ── -->
-          <div class="text-center mt-3 md:mt-4 text-xs md:text-sm text-white/20 font-mono tracking-wider">
+          <div class="text-center mt-3 md:mt-4 text-sm md:text-base text-white/20 font-mono tracking-wider">
             {{ formatClock(state.currentTime) }}
           </div>
         </div>
@@ -228,6 +312,20 @@
             <p class="text-xs text-white/20 mt-1">
               {{ state.selectedDate ? formatWeekday(state.selectedDate) : '' }}
             </p>
+            <!-- 特殊日期信息 -->
+            <div
+              v-if="state.selectedDate && getSpecialLabel(selectedDateStr)"
+              class="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-xs font-medium"
+              :class="getLabelColorClass(selectedDateStr)"
+            >
+              <span>{{ getSpecialTypeIcon(selectedDateStr) }}</span>
+              <span>{{ getSpecialLabel(selectedDateStr) }}</span>
+            </div>
+            <!-- 农历日期（日程详情显示完整信息） -->
+            <p
+              v-if="state.selectedDate"
+              class="text-sm text-white/30 mt-1.5"
+            >农历{{ getLunarFullText(selectedDateStr) }}</p>
           </div>
           <span class="text-[11px] text-white/20 hidden md:block">点击空白处返回日历</span>
         </div>
@@ -309,7 +407,8 @@
   <!-- ════════════════════════════════════════════ -->
   <!-- Vue 应用逻辑                                  -->
   <!-- ════════════════════════════════════════════ -->
-  <script>
+  <script type="module">
+    import { lunisolar } from 'https://unpkg.com/tinylunar/dist/index.js';
     const { createApp, reactive, computed, onMounted, onUnmounted, ref, nextTick } = Vue
 
     createApp({
@@ -452,18 +551,136 @@
           return state.eventsMap[dateStr] || []
         }
 
-        function getCellDots(dateStr) {
-          const events = getCellEvents(dateStr)
-          return events.slice(0, Math.min(events.length, 4))
+        // ──────────────────────────────────────
+        // 5. 特殊日期查询
+        // ──────────────────────────────────────
+
+        /** 查询日期标签文字 */
+        function getSpecialLabel(dateStr) {
+          const sd = getSpecialDate(dateStr)
+          return sd ? sd.name : null
+        }
+
+        /** 查询标签颜色 CSS 类 */
+        function getLabelColorClass(dateStr) {
+          const sd = getSpecialDate(dateStr)
+          return sd ? (LABEL_COLORS[sd.type] || '') : ''
+        }
+
+        /** 查询类型图标 */
+        function getSpecialTypeIcon(dateStr) {
+          const sd = getSpecialDate(dateStr)
+          if (!sd) return ''
+          const icons = { holiday: '🏖️', term: '🌿', makeup: '💼', rest: '😴' }
+          return icons[sd.type] || ''
+        }
+
+        /** 查询特殊日期背景图 URL */
+        function getSpecialBgUrl(dateStr) {
+          return getSpecialImage(dateStr)
         }
 
         // ──────────────────────────────────────
-        // 5. 节日/节气占位（预留接口）
+        // 5b. 农历查询（基于 tinylunar）
         // ──────────────────────────────────────
 
-        function getFestivalBackground(dateStr) {
-          // TODO: 后续实现数据源
-          return null
+        /** 农历查询缓存 */
+        const lunarCache = {}
+
+        /** 查询公历日期对应的农历信息 */
+        function queryLunar(dateStr) {
+          if (lunarCache[dateStr]) return lunarCache[dateStr]
+          try {
+            const info = lunisolar.query(dateStr)
+            lunarCache[dateStr] = info.lunar
+            return info.lunar
+          } catch (e) {
+            console.warn('农历查询失败:', dateStr, e)
+            lunarCache[dateStr] = null
+            return null
+          }
+        }
+
+        /** 获取农历日期文本（仅日期格使用，如"十五"） */
+        function getLunarText(dateStr) {
+          const lunar = queryLunar(dateStr)
+          return lunar ? lunar.date : ''
+        }
+
+        /** 获取完整农历文本（日程详情使用，如"四月十五"） */
+        function getLunarFullText(dateStr) {
+          const lunar = queryLunar(dateStr)
+          if (!lunar) return ''
+          return lunar.month + lunar.date
+        }
+
+        // ──────────────────────────────────────
+        // 5c. 背景切换
+        // ──────────────────────────────────────
+
+        const bgSpecialEl = document.getElementById('bg-special')
+        let currentBgUrl = null
+
+        function switchBackground(url) {
+          if (!url) { resetBackground(); return }
+          if (url === currentBgUrl) return // 避免重复切换同一图片
+
+          currentBgUrl = url
+          // 预加载后切换，避免闪烁
+          const img = new Image()
+          img.onload = () => {
+            if (currentBgUrl !== url) return // 期间已切换到其他图片
+            bgSpecialEl.style.backgroundImage = `url('${url}')`
+            bgSpecialEl.classList.add('visible')
+          }
+          img.onerror = () => {
+            // Q11-A: 静默回退到默认渐变
+            if (currentBgUrl === url) {
+              resetBackground()
+            }
+          }
+          img.src = url
+        }
+
+        function resetBackground() {
+          currentBgUrl = null
+          bgSpecialEl.classList.remove('visible')
+          // 延迟清除 background-image 让 opacity 过渡先执行
+          setTimeout(() => {
+            if (!currentBgUrl) {
+              bgSpecialEl.style.backgroundImage = ''
+            }
+          }, 600)
+        }
+
+        /** 预加载指定月份的图片 */
+        function preloadImages(year, month) {
+          const cells = generateCalendar(year, month)
+          for (const cell of cells) {
+            if (!cell.isCurrentMonth) continue
+            const url = getSpecialBgUrl(cell.dateStr)
+            if (url) {
+              const img = new Image()
+              img.src = url
+            }
+          }
+        }
+
+        /** 日期格子 hover → 切换背景 */
+        function handleCellHover(cell) {
+          if (state.mode !== 'home' && state.mode !== 'schedule') return
+          const url = getSpecialBgUrl(cell.dateStr)
+          if (url) {
+            switchBackground(url)
+          }
+        }
+
+        /** 日期格子离开 → 恢复背景 */
+        function handleCellLeave() {
+          if (state.mode === 'home') {
+            resetBackground()
+          }
+          // schedule 模式下离开不重置，保持当前选中日期的背景
         }
 
         // ──────────────────────────────────────
@@ -545,6 +762,7 @@
           state.currentMonth = cm
           state.monthKey++
           fetchMonthEvents(cm.getFullYear(), cm.getMonth())
+          preloadImages(cm.getFullYear(), cm.getMonth())
         }
 
         function goToPrevMonth() {
@@ -554,6 +772,7 @@
           state.currentMonth = cm
           state.monthKey++
           fetchMonthEvents(cm.getFullYear(), cm.getMonth())
+          preloadImages(cm.getFullYear(), cm.getMonth())
         }
 
         function handleWheel(e) {
@@ -587,9 +806,16 @@
           if (state.mode === 'home') {
             state.selectedDate = cell.date
             state.mode = 'schedule'
+            // Q9-A: 进入日程模式时同步切换背景图
+            const bgUrl = getSpecialBgUrl(cell.dateStr)
+            if (bgUrl) switchBackground(bgUrl)
             await fetchDayEvents(cell.dateStr)
           } else if (state.mode === 'schedule') {
             state.selectedDate = cell.date
+            // 切换日期时同步切换背景图
+            const bgUrl = getSpecialBgUrl(cell.dateStr)
+            if (bgUrl) switchBackground(bgUrl)
+            else resetBackground()
             await fetchDayEvents(cell.dateStr)
           }
         }
@@ -598,6 +824,7 @@
           state.mode = 'home'
           state.selectedDate = null
           state.scheduleEvents = []
+          resetBackground()
         }
 
         function formatEventTime(ev) {
@@ -788,10 +1015,17 @@
         onMounted(() => {
           // 初始加载当月事件
           fetchMonthEvents(state.currentMonth.getFullYear(), state.currentMonth.getMonth())
+          // 预加载当月特殊日期图片
+          preloadImages(state.currentMonth.getFullYear(), state.currentMonth.getMonth())
           // 启动实时时钟
           clockTimer = setInterval(() => {
             state.currentTime = new Date()
           }, 1000)
+          // 自动显示今天特殊背景（holiday > term > makeup > rest > 无）
+          const todayBgUrl = getSpecialBgUrl(todayStr.value)
+          if (todayBgUrl) {
+            switchBackground(todayBgUrl)
+          }
         })
 
         onUnmounted(() => {
@@ -813,7 +1047,14 @@
           calendarTransform,
           getCellClasses,
           getCellEvents,
-          getCellDots,
+          getSpecialLabel,
+          getLabelColorClass,
+          getSpecialTypeIcon,
+          getLunarText,
+          getLunarFullText,
+          selectedDateStr,
+          handleCellHover,
+          handleCellLeave,
           handleWheel,
           handleTouchStart,
           handleTouchEnd,
