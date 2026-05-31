@@ -1,4 +1,9 @@
+#MACOS的存储缓存
 .DS_Store
+#忽略python缓存
 __pycache__/
 *.pyc
+#数据库文件
 *.db
+
+.env

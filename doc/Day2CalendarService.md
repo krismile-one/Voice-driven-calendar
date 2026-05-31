@@ -216,11 +216,3 @@ test_update_event ......... PASSED
 | 测试方式 | 连真实临时 SQLite（非 mock），跑后自动清理 |
 
 ---
-
-## 七、待完善 / 与协作者对接
-
-- [ ] **整合胶水**：把 NLU 结果 → ISO 时间转 datetime → `add_event` 串起来（在 API 层或 GUI 层）
-- [ ] **time_parser**：实现 ISO 字符串 → datetime 的转换（瘦身版，配合 NLU 输出）
-- [ ] **API 路由**：在 `backend/api/events.py` 暴露事件 CRUD 接口（GUI / 外部调用）
-- [ ] **删除/更新的上层映射**：语音说“删除明天的会议”给的是标题，需要上层先按标题/时间查到 id，再调按 id 的 `delete_event` / `update_event`
-- [ ] **提醒循环**：消费 `get_upcoming_reminders`，按 `REMINDER_CHECK_INTERVAL` 定时检查并弹提醒
