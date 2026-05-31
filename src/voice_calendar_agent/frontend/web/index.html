@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>语音日历助手</title>
+  <title>语音日历demo_SMILE🙂队</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/static/js/special_dates.js"></script>
+  <script src="/static/js/special_dates.js?v=20260601"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -290,6 +290,22 @@
       background: rgba(250, 204, 21, 0.2);
     }
 
+    /* ── 天气预报 emoji（日期格右上角） ── */
+    .weather-emoji {
+      position: absolute;
+      top: 1px;
+      right: 2px;
+      font-size: 13px;
+      line-height: 1;
+      opacity: 0.7;
+      pointer-events: none;
+      filter: drop-shadow(0 0 1px rgba(0,0,0,0.3));
+      z-index: 2;
+    }
+    @media (min-width: 768px) {
+      .weather-emoji { font-size: 15px; top: 2px; right: 3px; }
+    }
+
     /* ── 日期数字容器（固定高度，与标签解耦） ── */
     .date-number {
       display: flex;
@@ -454,6 +470,12 @@
                 @mouseenter="handleCellHover(cell)"
                 @mouseleave="handleCellLeave"
               >
+                <!-- 天气预报 emoji（后三天，右上角） -->
+                <span
+                  v-if="cell.isCurrentMonth && getWeatherEmoji(cell.dateStr)"
+                  class="weather-emoji"
+                >{{ getWeatherEmoji(cell.dateStr) }}</span>
+
                 <!-- 日期数字（固定高度容器，与标签解耦） -->
                 <span
                   class="date-number"
@@ -1009,6 +1031,44 @@
         }
 
         // ──────────────────────────────────────
+        // 5e. 天气预报 emoji（日期格右上角）
+        // ──────────────────────────────────────
+
+        const forecastMap = reactive({})
+
+        async function fetchForecast() {
+          try {
+            let url = '/api/weather/forecast'
+            if (navigator.geolocation) {
+              try {
+                const pos = await new Promise((resolve, reject) => {
+                  navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    timeout: 5000, maximumAge: 600000
+                  })
+                })
+                url = `/api/weather/forecast?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+              } catch (geoErr) {
+                console.debug('Forecast geolocation skipped:', geoErr.message)
+              }
+            }
+            const data = await apiGet(url)
+            if (data && data.forecast) {
+              // 清空旧数据
+              Object.keys(forecastMap).forEach(k => delete forecastMap[k])
+              for (const day of data.forecast) {
+                forecastMap[day.date] = day.emoji
+              }
+            }
+          } catch (err) {
+            console.debug('Forecast fetch failed:', err.message)
+          }
+        }
+
+        function getWeatherEmoji(dateStr) {
+          return forecastMap[dateStr] || null
+        }
+
+        // ──────────────────────────────────────
         // 6. API 请求
         // ──────────────────────────────────────
 
@@ -1358,6 +1418,7 @@
           preloadImages(state.currentMonth.getFullYear(), state.currentMonth.getMonth())
           // 异步加载天气（不阻塞 UI）
           fetchAndApplyWeather()
+          fetchForecast()
           weatherRefreshTimer = setInterval(fetchAndApplyWeather, 30 * 60 * 1000)
           // 启动实时时钟
           clockTimer = setInterval(() => {
@@ -1414,6 +1475,7 @@
           formatEventTime,
           addToast,
           toastClasses,
+          getWeatherEmoji,
         }
       },
     }).mount('#app')

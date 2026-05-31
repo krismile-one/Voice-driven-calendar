@@ -154,3 +154,71 @@ geolocation 允许 → 本地坐标查天气
 | 05-31 | NLU 每月最后一天崩溃 | `nlu_service.py` | `now.replace(day=day+1)` → `timedelta(days=1)` |
 | 05-31 | 服务器 ffmpeg EBML header 解析失败 | `voice.py`, `index.html` | `fsync` + EBML 魔数校验 + 0.8s 最小录音时长 |
 | 05-31 | 天气背景集成 | `weather.py`, `app.py`, `index.html` | 新增 wttr.in 天气 API + 动态渐变/特效前端 |
+| 05-31 | 合并 dev/zhaobin 分支修复 | `events.py`, `nlu_service.py` | 删除防呆保护 + 泛指词批量删除 + 双向模糊匹配 + 提示词增强（4 示例） |
+| 05-31 | NLU 提示词残留行清理 | `nlu_service.py` | 删除示例 2 的无上下文重复 `输出` 行（合并冲突遗留） |
+| 05-31 | NLU 批量删除验证 | `events.py`, `nlu_service.py`, `voice.py` | 实测确认：NLU 返回单对象非数组，/execute delete 支持单日内模糊匹配批量删除，不支持跨日或混合意图 |
+| 05-31 | 三日预报 emoji | `weather.py`, `index.html` | 新增 `/api/weather/forecast` 端点 + 日期格右上角天气 emoji（☀️/⛅/☁️/🌧️/🌨️/🌫️/⛈️） |
+
+## 三日天气预报 emoji（2026-05-31）
+
+### 后端
+
+新增 `GET /api/weather/forecast`（[weather.py](src/voice_calendar_agent/backend/api/weather.py)）：
+
+- 复用 wttr.in `format=j1` 的 `weather[]` 数组，取未来 3 天每天中午时段的天气码
+- 返回 `ForecastResponse { forecast: [{date, weather_code, weather_desc, weather_category, emoji}] }`
+- 与 `/api/weather` 共享 `_fetch_wttr()` + 30min 内存缓存，不额外请求 wttr.in
+
+### 前端
+
+| 层 | 内容 |
+|----|------|
+| [CSS](src/voice_calendar_agent/frontend/web/index.html#L294) | `.weather-emoji` — `position: absolute; top: 1px; right: 2px`，响应式 `md:` 断点 |
+| [Template](src/voice_calendar_agent/frontend/web/index.html#L475) | `v-if="cell.isCurrentMonth && getWeatherEmoji(cell.dateStr)"` 仅当前月 + 有预报的日期显示 |
+| [JS](src/voice_calendar_agent/frontend/web/index.html#L1037) | `forecastMap` (reactive) + `fetchForecast()` (geolocation → API → fill map) + `getWeatherEmoji()` (dateStr lookup) |
+
+### Emoji 映射（WWO 码）
+
+| 分类 | Emoji | 典型 WWO 码 |
+|------|-------|------------|
+| 晴 | ☀️ | 113 |
+| 晴间多云 | ⛅ | 116 |
+| 多云/阴 | ☁️ | 119, 122 |
+| 雾/霾 | 🌫️ | 143, 248, 260 |
+| 雨（小~暴） | 🌧️ | 176, 263, 293, 302, 308, 359 |
+| 雪/雨夹雪 | 🌨️ | 179, 227, 323, 368, 395 |
+| 雷暴 | ⛈️ | 200, 386, 389, 392 |
+| 冻雨/冻毛毛雨 | 🌧️ | 185, 281, 311, 314 |
+
+降级：API 失败返回空 `forecast[]`，前端不显示任何 emoji（不阻塞 UI）。
+
+## NLU 批量删除架构验证（2026-05-31）
+
+### 结论：NLU 返回单对象，/execute 已支持单日批量删除
+
+**数据流**：
+
+```
+语音 → ASR → 文本 → NLU /parse → 单个 NLUResponse（dict，非数组）
+                                          ↓
+                                    /api/execute（单对象入参）
+                                          ↓
+                              delete_event: get_events(day) → 模糊匹配 → for 循环删
+```
+
+**批量删除匹配逻辑**（[events.py:270-287](src/voice_calendar_agent/backend/api/events.py)）：
+
+| 场景 | NLU title | 匹配 | 效果 |
+|------|-----------|------|------|
+| 泛指词（"删除明天的事情"） | `""` | 全选当天 | 当天全部事件 |
+| 关键词（"删除明天的会议"） | `"会议"` | `keyword in e.title` | 标题含"会议"的全部 |
+| 单字（"删除明天的会"） | `"会"` | `k in e.title OR e.title in k` | "项目例**会**""部门**会**议" |
+
+**实测**：创建（项目例会、部门会议、看电影）→ 删 title="会" → 删 2 条保留 1 条 ✅
+
+**当前限制**：
+
+- ✅ 单日内模糊匹配批量删除
+- ✅ 泛指词全删当天
+- ❌ 跨日批量（"删除这周所有会议"）— 需要 NLU 返回日期范围 + 后端多日查询
+- ❌ 混合意图（"删除会议并添加聚餐"）— 需要 NLU 返回数组 + 前端轮调或批量端点
