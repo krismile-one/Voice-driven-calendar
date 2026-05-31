@@ -72,6 +72,7 @@ const SPECIAL_DATES = {
   // ════════════════════════════════════════════
   // 六月
   // ════════════════════════════════════════════
+  "2026-06-01": { type: "holiday",    name: "儿童节",     image: "images/jieri/儿童节.png" },
   "2026-06-05": { type: "term",    name: "芒种",     image: "images/24_jieqi/9_芒种.png" },
   "2026-06-19": { type: "holiday", name: "端午节",   image: "images/jieri/端午节.png" },
   "2026-06-20": { type: "rest",    name: "休息" },
