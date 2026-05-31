@@ -4,7 +4,16 @@
 
 技术栈：Python 3.11+、uv、FastAPI、SQLite、百度语音（在线 ASR）、DeepSeek（NLU）、Vue 3。
 
-<!-- 截图待补：建议放一张「日历月视图 + 语音按钮 + 天气背景」 -->
+### web页面展示：
+![alt text](e20d91c6803d3ff65e03289f5942d1dc.png)
+---
+### demo视频链接：
+通过网盘分享的文件：语音助手.mov
+链接: https://pan.baidu.com/s/17FYjyAflv3zEWfxyEJombw?pwd=1234 提取码: 1234 
+--来自百度网盘超级会员v3的分享
+### 部署上线体验：
+https://139.196.59.150:8000
+
 
 ## 目录
 
