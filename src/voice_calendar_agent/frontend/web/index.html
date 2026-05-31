@@ -81,6 +81,28 @@
     .list-enter-from   { opacity: 0; transform: translateX(16px); }
     .list-leave-to     { opacity: 0; transform: translateX(-16px); }
 
+    /* ── Apple 液态玻璃卡片 ── */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* ── Apple 液态玻璃面板（侧边栏） ── */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.09);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow:
+        -8px 0 32px rgba(0, 0, 0, 0.1),
+        inset 1px 0 0 rgba(255, 255, 255, 0.06);
+    }
+
     /* ── 日历卡片 tilt 过渡 ── */
     .tilt-transition {
       transition: transform 0.4s ease-out;
@@ -99,32 +121,32 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 1.35em;
+      height: 1.5em;
       line-height: 1;
     }
 
     /* ── 特殊日期标签 ── */
     .date-label {
-      font-size: 9px;
+      font-size: 10px;
       line-height: 1;
-      padding: 1px 4px;
+      padding: 1.5px 5px;
       border-radius: 3px;
       white-space: nowrap;
       letter-spacing: 0.5px;
     }
     @media (min-width: 768px) {
-      .date-label { font-size: 10px; padding: 1.5px 5px; }
+      .date-label { font-size: 11px; padding: 2px 6px; }
     }
 
     /* ── 农历文本 ── */
     .lunar-text {
-      font-size: 9px;
+      font-size: 10px;
       line-height: 1;
       color: rgba(255, 255, 255, 0.35);
       white-space: nowrap;
     }
     @media (min-width: 768px) {
-      .lunar-text { font-size: 10px; }
+      .lunar-text { font-size: 11px; }
     }
 
     /* ── 事件数量红点标记 ── */
@@ -132,21 +154,21 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 4px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
       border-radius: 9999px;
       background: rgba(239, 68, 68, 0.85);
       color: #fff;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       line-height: 1;
     }
     @media (min-width: 768px) {
       .event-badge {
-        min-width: 18px;
-        height: 18px;
-        font-size: 11px;
+        min-width: 20px;
+        height: 20px;
+        font-size: 12px;
       }
     }
 
@@ -214,7 +236,7 @@
         <!-- ── 液态玻璃卡片 ── -->
         <div
           ref="tiltCard"
-          class="bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-2xl p-3 md:p-6 select-none w-[94vw] max-w-[560px]"
+          class="glass-card rounded-2xl p-4 md:p-8 select-none w-[95vw] max-w-[680px]"
         >
           <!-- ── 月份导航 ── -->
           <div class="flex items-center justify-between mb-4 px-1">
@@ -223,7 +245,7 @@
               class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/40 hover:text-white/80 text-lg"
               title="上个月"
             >←</button>
-            <span class="text-base md:text-lg font-medium text-white/85 tracking-wide">
+            <span class="text-lg md:text-2xl font-medium text-white/85 tracking-wide">
               {{ state.currentMonth.getFullYear() }}年 {{ state.currentMonth.getMonth() + 1 }}月
             </span>
             <button
@@ -238,7 +260,7 @@
             <div
               v-for="wd in weekdays"
               :key="wd"
-              class="text-center text-xs md:text-sm text-white/25 py-1.5 font-medium"
+              class="text-center text-sm md:text-base text-white/40 py-2 font-medium"
             >{{ wd }}</div>
           </div>
 
@@ -247,7 +269,7 @@
             :name="state.slideDirection === 'next' ? 'slide-next' : 'slide-prev'"
             mode="out-in"
           >
-            <div :key="state.monthKey" class="grid grid-cols-7 gap-1 md:gap-1.5">
+            <div :key="state.monthKey" class="grid grid-cols-7 gap-1.5 md:gap-2">
               <div
                 v-for="(cell, idx) in flatCells"
                 :key="idx"
@@ -260,7 +282,7 @@
                 <!-- 日期数字（固定高度容器，与标签解耦） -->
                 <span
                   class="date-number"
-                  :class="[cell.isCurrentMonth ? 'text-white/75' : 'text-white/20', 'text-lg md:text-xl']"
+                  :class="[cell.isCurrentMonth ? 'text-white/75' : 'text-white/35', 'text-xl md:text-2xl']"
                 >{{ cell.day }}</span>
 
                 <!-- 特殊日期标签（仅当前月；优先于农历） -->
@@ -287,7 +309,7 @@
           </Transition>
 
           <!-- ── 实时时钟 ── -->
-          <div class="text-center mt-3 md:mt-4 text-sm md:text-base text-white/20 font-mono tracking-wider">
+          <div class="text-center mt-3 md:mt-5 text-base md:text-lg text-white/35 font-mono tracking-wider">
             {{ formatClock(state.currentTime) }}
           </div>
         </div>
@@ -298,7 +320,7 @@
     <!-- 日程面板 (z-30)                               -->
     <!-- ════════════════════════════════════════════ -->
     <div
-      class="fixed top-0 right-0 h-full w-full md:w-[55%] z-30 transition-transform duration-500 ease-out bg-white/[0.03] backdrop-blur-3xl border-l border-white/[0.06] shadow-2xl"
+      class="glass-panel fixed top-0 right-0 h-full w-full md:w-[55%] z-30 transition-transform duration-500 ease-out"
       :class="state.mode === 'schedule' ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'"
       @click.stop
     >
@@ -306,10 +328,10 @@
         <!-- ── 面板标题 ── -->
         <div class="flex items-center justify-between mb-6">
           <div>
-            <h2 class="text-xl md:text-2xl font-medium text-white/85">
+            <h2 class="text-2xl md:text-3xl font-medium text-white/85">
               {{ state.selectedDate ? formatDateChinese(state.selectedDate) : '' }}
             </h2>
-            <p class="text-xs text-white/20 mt-1">
+            <p class="text-xs text-white/35 mt-1">
               {{ state.selectedDate ? formatWeekday(state.selectedDate) : '' }}
             </p>
             <!-- 特殊日期信息 -->
@@ -324,10 +346,10 @@
             <!-- 农历日期（日程详情显示完整信息） -->
             <p
               v-if="state.selectedDate"
-              class="text-sm text-white/30 mt-1.5"
+              class="text-sm text-white/45 mt-1.5"
             >农历{{ getLunarFullText(selectedDateStr) }}</p>
           </div>
-          <span class="text-[11px] text-white/20 hidden md:block">点击空白处返回日历</span>
+          <span class="text-[11px] text-white/35 hidden md:block">点击空白处返回日历</span>
         </div>
 
         <!-- ── 返回按钮（移动端） ── -->
@@ -340,18 +362,18 @@
         <div class="flex-1 overflow-y-auto custom-scrollbar">
           <div v-if="state.scheduleEvents.length === 0 && !state.scheduleEventsLoading" class="text-center mt-16 md:mt-24">
             <div class="text-4xl mb-4 opacity-20">📭</div>
-            <p class="text-white/25 text-sm">这一天暂无日程安排</p>
+            <p class="text-white/40 text-sm">这一天暂无日程安排</p>
           </div>
 
           <div v-if="state.scheduleEventsLoading" class="flex items-center justify-center mt-24">
-            <span class="text-white/30 text-sm">加载中...</span>
+            <span class="text-white/45 text-sm">加载中...</span>
           </div>
 
           <TransitionGroup name="list" tag="div">
             <div
               v-for="ev in state.scheduleEvents"
               :key="ev.id"
-              class="mb-3 p-4 rounded-xl bg-white/[0.04] border border-white/[0.05] hover:bg-white/[0.08] transition-colors"
+              class="mb-3 p-4 rounded-xl bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.12] transition-colors"
             >
               <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0">
@@ -361,12 +383,12 @@
                   </div>
                   <div
                     v-if="ev.description"
-                    class="text-sm text-white/25 mt-1.5 line-clamp-2"
+                    class="text-sm text-white/40 mt-1.5 line-clamp-2"
                   >{{ ev.description }}</div>
                 </div>
                 <div
                   v-if="ev.reminder"
-                  class="ml-3 flex-shrink-0 text-[10px] text-white/20 bg-white/5 px-2 py-0.5 rounded-full"
+                  class="ml-3 flex-shrink-0 text-[10px] text-white/35 bg-white/5 px-2 py-0.5 rounded-full"
                   title="已开启提醒">
                   🔔 {{ ev.reminder_minutes }}分钟
                 </div>
@@ -378,7 +400,7 @@
         <!-- ── 底部语音入口 ── -->
         <div class="mt-4 pt-4 border-t border-white/[0.05]">
           <button
-            class="w-full py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-white/35 text-sm hover:bg-white/[0.06] hover:text-white/55 transition-all"
+            class="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/50 text-sm hover:bg-white/[0.10] hover:text-white/70 transition-all"
             @click="addToast('使用语音添加日程：返回首页后点击背景区域开始录音', 'info')"
           >
             🎤 语音添加日程

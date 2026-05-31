@@ -70,21 +70,32 @@
 
 ## 🚀 快速开始
 
+### 系统依赖
+
+| 依赖 | 用途 | 安装 |
+|------|------|------|
+| **Python 3.11+** | 运行环境 | https://python.org |
+| **ffmpeg** | Web 录音格式转换（webm→WAV） | `winget install ffmpeg` / `brew install ffmpeg` / `sudo apt install ffmpeg` |
+| **uv** | Python 包管理器 | `pip install uv` |
+
+### 一键配置
+
 ```bash
-# 1. 安装 uv（如未安装）
-pip install uv
+python setup.py              # 检查所有依赖
+python setup.py --fix        # 自动修复（安装依赖 + 创建 .env）
+```
 
-# 2. 安装依赖
+### 手动配置
+
+```bash
+# 1. 安装 Python 依赖
 uv sync
-#   需要离线识别 / 桌面 GUI 时，附加可选依赖：
-uv sync --extra vosk --extra gui
 
-# 3. 配置环境变量
+# 2. 配置环境变量
 cp .env.example .env        # Windows: copy .env.example .env
-#   编辑 .env，填入百度语音与大模型的密钥（见下方配置说明）
+#   编辑 .env，填入 ASR_API_KEY 和 LLM_API_KEY（见下方配置说明）
 
-# 4. 运行
-uv run python main.py            # 终端交互模式（默认）
+# 3. 运行
 uv run python main.py --api      # API 服务模式（FastAPI，端口 8000）
 ```
 
