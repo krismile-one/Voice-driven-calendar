@@ -82,6 +82,6 @@ Step 3: POST /api/events/execute  → 执行指令，返回操作结果
 
 ## 六、待完善
 
-- [ ] `/execute` 的 `update_event` 分支（当前提示用 REST 接口）
-- [ ] `/execute` 的 `delete_event` 按标题模糊匹配的精确度
-- [ ] 测试中 NLU 调用真实 API，后续可加 mock 选项
+- [✅] `/execute` 的 `update_event` 分支（当前提示用 REST 接口）
+- [✅] `/execute` 的 `delete_event` 按标题模糊匹配的精确度
+- [✅] 测试中 NLU 调用真实 API，后续可加 mock 选项
