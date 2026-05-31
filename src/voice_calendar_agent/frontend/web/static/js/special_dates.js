@@ -32,6 +32,7 @@ const SPECIAL_DATES = {
   // ════════════════════════════════════════════
   "2026-02-04": { type: "term",    name: "立春",     image: "images/24_jieqi/1_立春.png" },
   "2026-02-14": { type: "makeup",  name: "补班" },
+  "2026-02-14": { type: "holiday",  name: "情人节",   image:"images/jieri/情人节.png" },
   "2026-02-15": { type: "holiday", name: "春节",     image: "images/jieri/春节.png" },
   "2026-02-16": { type: "rest",    name: "休息" },
   "2026-02-17": { type: "rest",    name: "休息" },
@@ -47,6 +48,7 @@ const SPECIAL_DATES = {
   // 三月
   // ════════════════════════════════════════════
   "2026-03-05": { type: "term",    name: "惊蛰",     image: "images/24_jieqi/3_惊蛰.png" },
+  "2026-03-08": { type: "term",    name: "妇女节",    image: "images/节日/妇女节.png" },
   "2026-03-20": { type: "term",    name: "春分",     image: "images/24_jieqi/4_春分.png" },
 
   // ════════════════════════════════════════════
