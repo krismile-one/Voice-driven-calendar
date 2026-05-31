@@ -109,7 +109,46 @@ src/voice_calendar_agent/
 tests/ — 17 条测试全部通过
 ```
 
-## 修复记录
+### NLU 跨月日期溢出修复（2026-05-31）
+
+**问题**：每月最后一天（31日/28日/30日）NLU 解析必然崩溃，报 `day is out of range for month`。语音识别成功、文本正确，但 parse 阶段直接抛异常。
+
+**根因**：`nlu_service.py#L186` 提示词示例 2 用了 `now.replace(day=now.day+1)` 计算"明天"的日期。当今天是 5 月 31 日时，`now.day+1 = 32`，`datetime.replace(day=32)` 在 5 月只有 31 天的情况下抛出 `ValueError`。虽然异常被 `parse_command()` 的 `except` 兜底捕获并降级为 `unknown`，但导致整个 NLU 链中断。
+
+**场景复现**：
+
+```
+当前日期: 2026-05-31
+执行路径: startRecording → upload → parse → _build_prompt
+崩溃点:   now.replace(day=31+1) → day=32 → ValueError("day is out of range for month")
+影响范围: 每月 28/29/30/31 日 — 所有触发"明天"相关提示词的请求
+```
+
+**为什么语音识别成功但 NLU 失败？**
+
+```
+语音链路:  浏览器录音 → ffmpeg 转码 → 百度 ASR → 文本 ✅ 成功
+NLU 链路:  文本 → _build_prompt → 构建示例时 now.replace(day=32) → 💥
+```
+
+两条链路独立，ASR 正常返回文本后，NLU 在构建提示词阶段就崩了，根本没到调用大模型那一步。
+
+**修复方案**：
+
+| # | 位置 | 旧代码 | 新代码 | 说明 |
+|---|------|--------|--------|------|
+| 1 | `nlu_service.py` L12 | `from datetime import datetime` | `from datetime import datetime, timedelta` | 引入 timedelta |
+| 2 | `nlu_service.py` L186 | `now.replace(day=now.day+1)` | `(now + timedelta(days=1))` | 用标准日期运算替代手动 replace |
+
+`timedelta` 会正确处理跨月/跨年/闰年，不会出现非法日期。
+
+**教训总结**：
+
+- `datetime.replace(day=...)` 对越界值不安全，**永远用 `datetime + timedelta(days=N)` 做日期加减**
+- 提示词中的动态示例也会成为崩溃点 — 示例不是"死文字"，里面的 Python 代码照样会执行
+- 跨月边界是典型盲区 — 开发时恰好是 30 号，没触发 31 号的 bug；需要刻意在月末/年初/2 月底测试
+
+### 修复记录
 
 | 日期 | 问题 | 修改文件 | 修改内容 |
 |------|------|----------|----------|
@@ -119,6 +158,8 @@ tests/ — 17 条测试全部通过
 | 05-31 | 数据库为空无法验证前端 | 临时脚本 | Python 注入 8 条测试事件（5月3条 + 6月5条） |
 | 05-31 | jieri 图片 `.jpg` 引用实际为 `.png` | `special_dates.js` | 6 处扩展名修正 |
 | 05-31 | 浏览器 webm/opus → 百度 ASR 格式不匹配 | `voice.py` | 新增 ffmpeg 转码层（webm→16kHz PCM WAV） |
+| 05-31 | 服务器部署后麦克风被浏览器阻止 | `config.py`, `app.py`, `main.py`, `index.html` 等 7 个文件 | 新增 `--ssl` 自签名证书 + HTTPS 启动 |
+| 05-31 | 每月最后一天 NLU 崩溃：`now.replace(day=32)` 跨月溢出 | `nlu_service.py` L12, L186 | `replace(day=day+1)` → `+ timedelta(days=1)` |
 
 ### 服务器 HTTPS 部署修复（2026-05-31）
 
