@@ -453,6 +453,7 @@
           currentTime: new Date(),
           mediaRecorder: null,
           audioChunks: [],
+          recordingStartTime: 0,
           toasts: [],
         })
 
@@ -923,6 +924,13 @@
                 return
               }
 
+              // 最低录音时长检查（< 0.8 秒可能生成无效 webm）
+              const duration = (Date.now() - state.recordingStartTime) / 1000
+              if (duration < 0.8) {
+                addToast(`录音时长过短（${duration.toFixed(1)}秒），请至少录制 1 秒`, 'error')
+                return
+              }
+
               const blob = new Blob(state.audioChunks, { type: mimeType })
               addToast('正在识别语音...', 'info')
 
@@ -967,6 +975,7 @@
             }
 
             recorder.start()
+            state.recordingStartTime = Date.now()
             state.mode = 'recording'
             addToast('开始录音 · 点击空白处停止', 'info')
           } catch (err) {
