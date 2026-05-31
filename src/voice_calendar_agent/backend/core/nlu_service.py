@@ -199,9 +199,6 @@ class NLUService:
 输入："删除明天的事情"
 输出：{{"intent":"delete_event","title":"","time":"{tomorrow_str}T00:00:00","time_range":"day","reminder":false,"reminder_minutes":0,"description":""}}
 
-输出：{{"intent":"query_events","title":"","time":"{(now + timedelta(days=1)).strftime('%Y-%m-%d')}T00:00:00","time_range":"morning","reminder":false,"reminder_minutes":0,"description":""}}
-
-
 语音识别可能产生同音字错误，请根据日历场景语义自动修正 title 中的错误：
 - "回忆""会意""回议" → "会议"
 - "灰机""飞及" → "飞机"
