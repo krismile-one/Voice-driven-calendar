@@ -7,6 +7,8 @@
 import json
 import logging
 import os
+import shutil
+import subprocess
 import tempfile
 
 from fastapi import APIRouter, File, UploadFile, WebSocket
@@ -60,23 +62,71 @@ class NLUResponse(BaseModel):
     description: Optional[str] = None
 
 
+# ========== 音频格式转换 ==========
+
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
+BAIDU_ACCEPT_FORMATS = {"pcm", "wav", "amr"}
+
+
+def _needs_conversion(file_path: str) -> bool:
+    """判断音频文件是否需要转为 WAV"""
+    ext = os.path.splitext(file_path)[1].lower().lstrip(".")
+    return ext not in BAIDU_ACCEPT_FORMATS
+
+
+def _convert_to_wav(input_path: str) -> str:
+    """
+    使用 ffmpeg 将音频转为 16kHz 单声道 PCM WAV
+
+    输入：
+        input_path: 原始音频文件路径
+    输出：
+        str - 转换后的 WAV 文件路径
+    异常：
+        RuntimeError: ffmpeg 未安装或转换失败
+    """
+    if not FFMPEG_AVAILABLE:
+        raise RuntimeError("ffmpeg 未安装，无法转换音频格式。请安装 ffmpeg 后重试。")
+
+    output_path = input_path + ".wav"
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_path,
+        "-f", "wav",
+        "-acodec", "pcm_s16le",
+        "-ar", "16000",
+        "-ac", "1",
+        output_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.error(f"ffmpeg 转换失败: {result.stderr}")
+        raise RuntimeError(f"音频格式转换失败: {result.stderr}")
+
+    logger.info(f"音频已转换: {input_path} → {output_path}")
+    return output_path
+
+
 # ========== API端点 ==========
 
 
 @router.post("/upload", response_model=VoiceRecognizeResponse)
 async def upload_audio(audio: UploadFile = File(...)):
     """
-    上传音频文件进行识别
+    上传音频文件进行识别（支持 webm / wav / pcm 等格式）
 
     输入：
-        audio: UploadFile - WAV格式音频文件
+        audio: UploadFile - 音频文件
     输出：
         VoiceRecognizeResponse - 识别结果（文本和置信度）
     """
+    tmp_path = None
+    converted_path = None
+
     try:
         audio_bytes = await audio.read()
 
-        suffix = ".wav"
+        suffix = ".webm"
         if audio.filename:
             ext = os.path.splitext(audio.filename)[1]
             if ext:
@@ -86,16 +136,27 @@ async def upload_audio(audio: UploadFile = File(...)):
             tmp.write(audio_bytes)
             tmp_path = tmp.name
 
-        try:
-            service = get_voice_service()
-            text = service.recognize_file(tmp_path)
-            return VoiceRecognizeResponse(text=text, confidence=None)
-        finally:
-            os.unlink(tmp_path)
+        # 非 WAV/PCM 格式（如 webm/opus）需用 ffmpeg 转码
+        recognize_path = tmp_path
+        if _needs_conversion(tmp_path):
+            converted_path = _convert_to_wav(tmp_path)
+            recognize_path = converted_path
 
+        service = get_voice_service()
+        text = service.recognize_file(recognize_path)
+        return VoiceRecognizeResponse(text=text, confidence=None)
+
+    except RuntimeError as e:
+        logger.error(f"音频处理失败: {e}")
+        return VoiceRecognizeResponse(text=f"识别失败: {str(e)}", confidence=None)
     except Exception as e:
         logger.error(f"语音识别失败: {e}")
         return VoiceRecognizeResponse(text=f"识别失败: {str(e)}", confidence=None)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        if converted_path and os.path.exists(converted_path):
+            os.unlink(converted_path)
 
 
 @router.post("/parse", response_model=NLUResponse)
