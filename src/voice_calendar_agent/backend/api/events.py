@@ -259,26 +259,35 @@ async def execute_command(nlu_result: NLUResponse, db=Depends(get_db)):
         return MessageResponse(message=f"已添加事件：{event.title}", id=event.id)
 
     elif intent == "delete_event":
+        # 防呆：既没说具体名称、又没说哪一天，拒绝（否则会误删全库）
+        if not title and not start_time:
+            return MessageResponse(message="请说明要删除哪一天，或要删除的具体事件名称")
+
         events = service.get_events(date=start_time, range="day")
         if not events:
-            return MessageResponse(message="该时间段没有事件")
+            return MessageResponse(message="没有找到可删除的事件")
 
-        # 精确匹配
-        exact = [e for e in events if e.title == title]
-        if len(exact) == 1:
-            service.delete_event(exact[0].id)
-            return MessageResponse(message=f"已删除事件：{exact[0].title}", id=exact[0].id)
-
-        # 模糊匹配
-        fuzzy = [e for e in events if title in e.title] if title else events
-        if len(fuzzy) == 0:
-            return MessageResponse(message=f"未找到与'{title}'相关的事件")
-        elif len(fuzzy) == 1:
-            service.delete_event(fuzzy[0].id)
-            return MessageResponse(message=f"已删除事件：{fuzzy[0].title}", id=fuzzy[0].id)
+        if not title:
+            # 泛指词（"事情/日程/安排"→NLU 给空 title）：删当天全部
+            targets = events
         else:
-            titles = "、".join(e.title for e in fuzzy)
-            return MessageResponse(message=f"找到多个事件：{titles}，请指定具体事件名称")
+            # 优先精确匹配；没有精确的再双向模糊匹配
+            exact = [e for e in events if e.title == title]
+            if exact:
+                targets = exact
+            else:
+                # 双向：关键词在标题里，或标题在关键词里
+                targets = [e for e in events if title in e.title or e.title in title]
+
+        if not targets:
+            return MessageResponse(message=f"未找到与'{title}'相关的事件")
+
+        deleted_titles = [e.title for e in targets]
+        for e in targets:
+            service.delete_event(e.id)
+        return MessageResponse(
+            message=f"已删除 {len(deleted_titles)} 个事件：{'、'.join(deleted_titles)}"
+        )
 
     elif intent == "update_event":
         # update_event 需要更多信息（改什么字段），NLU 当前不输出，提示用户
