@@ -57,6 +57,180 @@
       opacity: 1;
     }
 
+    /* ── 背景层：天气特效（叠加在渐变之上，特殊日期之下） ── */
+    .bg-effects-layer {
+      position: fixed; inset: 0; z-index: -1;
+      pointer-events: none; overflow: hidden;
+      opacity: 0; transition: opacity 0.8s ease-in-out;
+    }
+    .bg-effects-layer.active { opacity: 1; }
+
+    /* ── 天气渐变：覆盖默认层（通过 body 属性触发） ── */
+    /* 晴天 — 白天 */
+    body[data-weather-category="sunny"][data-daynight="day"] .bg-default-layer {
+      background: linear-gradient(135deg, #F8CD5A 0%, #5B9BD5 40%, #7EC8E3 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 25s ease infinite;
+    }
+    /* 晴天 — 夜间 */
+    body[data-weather-category="sunny"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(135deg, #1a1a3e 0%, #2d1b69 40%, #1a3a5c 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 30s ease infinite;
+    }
+    /* 晴间多云 — 白天 */
+    body[data-weather-category="partly_cloudy"][data-daynight="day"] .bg-default-layer {
+      background: linear-gradient(135deg, #E8C855 0%, #6BA5D1 50%, #8CB8D8 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 22s ease infinite;
+    }
+    /* 晴间多云 — 夜间 */
+    body[data-weather-category="partly_cloudy"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(135deg, #1E1E3A 0%, #38206B 50%, #1E3050 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 28s ease infinite;
+    }
+    /* 多云 — 白天/夜间 */
+    body[data-weather-category="cloudy"] .bg-default-layer,
+    body[data-weather-category="overcast"] .bg-default-layer {
+      background: linear-gradient(135deg, #7B8D9E 0%, #8BA4B5 50%, #9BB5C0 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 35s ease infinite;
+    }
+    body[data-weather-category="cloudy"][data-daynight="night"] .bg-default-layer,
+    body[data-weather-category="overcast"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #3A4050 0%, #252A35 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 40s ease infinite;
+    }
+    /* 雾/霾 — 白天/夜间 */
+    body[data-weather-category="fog"] .bg-default-layer {
+      background: linear-gradient(180deg, #C8D0D6 0%, #B0B8C0 60%, #9BA5B0 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 40s ease infinite;
+    }
+    body[data-weather-category="fog"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #505860 0%, #383F48 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 45s ease infinite;
+    }
+    /* 小雨/阵雨 — 白天/夜间 */
+    body[data-weather-category="light_rain"] .bg-default-layer,
+    body[data-weather-category="moderate_rain"] .bg-default-layer {
+      background: linear-gradient(180deg, #5A6A7A 0%, #4A5A6A 60%, #3A4858 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 30s ease infinite;
+    }
+    body[data-weather-category="light_rain"][data-daynight="night"] .bg-default-layer,
+    body[data-weather-category="moderate_rain"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #3A4A5C 0%, #2A3A4C 60%, #1E2A38 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 35s ease infinite;
+    }
+    /* 大雨/暴雨 — 白天/夜间 */
+    body[data-weather-category="heavy_rain"] .bg-default-layer {
+      background: linear-gradient(180deg, #4A5A6A 0%, #3A4A5A 60%, #2A3848 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 25s ease infinite;
+    }
+    body[data-weather-category="heavy_rain"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #2E3E52 0%, #1E2E42 60%, #162030 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 30s ease infinite;
+    }
+    /* 雪/雨夹雪 — 白天/夜间 */
+    body[data-weather-category="snow"] .bg-default-layer,
+    body[data-weather-category="sleet"] .bg-default-layer {
+      background: linear-gradient(180deg, #D8DEE6 0%, #C8D4E0 50%, #A0B8D0 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 35s ease infinite;
+    }
+    body[data-weather-category="snow"][data-daynight="night"] .bg-default-layer,
+    body[data-weather-category="sleet"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #B0B8C8 0%, #8A98B0 60%, #7A90A8 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 40s ease infinite;
+    }
+    /* 冻雨/冻毛毛雨 — 白天/夜间 */
+    body[data-weather-category="freezing_drizzle"] .bg-default-layer,
+    body[data-weather-category="freezing_rain"] .bg-default-layer {
+      background: linear-gradient(180deg, #8CA0B8 0%, #7A90A8 60%, #6880A0 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 30s ease infinite;
+    }
+    body[data-weather-category="freezing_drizzle"][data-daynight="night"] .bg-default-layer,
+    body[data-weather-category="freezing_rain"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #506070 0%, #405060 60%, #304050 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 35s ease infinite;
+    }
+    /* 雷暴 — 白天/夜间 */
+    body[data-weather-category="thunder"] .bg-default-layer {
+      background: linear-gradient(180deg, #3A4050 0%, #2A3040 50%, #1A1A2E 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 20s ease infinite;
+    }
+    body[data-weather-category="thunder"][data-daynight="night"] .bg-default-layer {
+      background: linear-gradient(180deg, #1A1A2E 0%, #12122A 60%, #0A0A1A 100%);
+      background-size: 400% 400%;
+      animation: gradient-shift 25s ease infinite;
+    }
+
+    /* ── 天气特效：雨滴 ── */
+    @keyframes raindrop-fall {
+      0%   { transform: translateY(-10vh); opacity: 0; }
+      10%  { opacity: 0.6; }
+      90%  { opacity: 0.4; }
+      100% { transform: translateY(110vh); opacity: 0; }
+    }
+    .bg-effects-layer .raindrop {
+      position: absolute; top: -10vh;
+      width: 2px; height: 16px;
+      background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.35));
+      border-radius: 1px;
+      animation: raindrop-fall linear infinite;
+    }
+    /* ── 天气特效：雪花 ── */
+    @keyframes snowflake-fall {
+      0%   { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
+      10%  { opacity: 0.8; }
+      90%  { opacity: 0.5; }
+      100% { transform: translateY(110vh) translateX(40px) rotate(360deg); opacity: 0; }
+    }
+    .bg-effects-layer .snowflake {
+      position: absolute; top: -10vh;
+      width: 4px; height: 4px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 50%;
+      animation: snowflake-fall linear infinite;
+    }
+    /* ── 天气特效：星星闪烁（夜间晴天） ── */
+    @keyframes star-twinkle {
+      0%, 100% { opacity: 0.3; }
+      50%      { opacity: 1; }
+    }
+    .bg-effects-layer .star {
+      position: absolute;
+      width: 2px; height: 2px;
+      background: #fff;
+      border-radius: 50%;
+      animation: star-twinkle ease-in-out infinite;
+      box-shadow: 0 0 3px rgba(255,255,255,0.6);
+    }
+    /* 雷电闪烁 */
+    @keyframes lightning-flash {
+      0%, 90%, 92%, 94%, 96%, 100% { opacity: 0; }
+      91% { opacity: 0.15; }
+      93% { opacity: 0.08; }
+      95% { opacity: 0.12; }
+    }
+    .bg-effects-layer .lightning {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.06);
+      animation: lightning-flash 8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
     /* ── 月份滑动过渡（前进：从右进入，向左退出） ── */
     .slide-next-enter-active { transition: all 0.35s ease-out; }
     .slide-next-leave-active { transition: all 0.25s ease-in; }
@@ -190,6 +364,7 @@
   <!-- 背景层（双层结构）                             -->
   <!-- ════════════════════════════════════════════ -->
   <div class="bg-default-layer"></div>
+  <div id="bg-effects" class="bg-effects-layer"></div>
   <div id="bg-special" class="bg-special-layer"></div>
 
   <div id="app">
@@ -707,6 +882,133 @@
         }
 
         // ──────────────────────────────────────
+        // 5d. 天气背景
+        // ──────────────────────────────────────
+
+        const bgEffectsEl = document.getElementById('bg-effects')
+        let weatherRefreshTimer = null
+        let weatherActive = false
+
+        /** 获取天气并应用到背景（降级链：geolocation → 北京默认 → 默认渐变） */
+        async function fetchAndApplyWeather() {
+          try {
+            let url = '/api/weather'
+            // 尝试获取定位
+            if (navigator.geolocation) {
+              try {
+                const pos = await new Promise((resolve, reject) => {
+                  navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    timeout: 5000, maximumAge: 600000
+                  })
+                })
+                url = `/api/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+              } catch (geoErr) {
+                // geolocation 被拒绝或超时，使用默认北京坐标
+                console.debug('Geolocation unavailable, using default location:', geoErr.message)
+              }
+            }
+            const data = await apiGet(url)
+            if (!data) return
+
+            // 设置 body 属性触发 CSS 天气渐变
+            document.body.dataset.weatherCategory = data.weather_category
+            document.body.dataset.daynight = data.is_day ? 'day' : 'night'
+            weatherActive = true
+
+            // 渲染天气特效（雨滴/雪花/星星）
+            renderWeatherEffects(data.weather_category, data.is_day)
+
+            console.debug(
+              `Weather applied: ${data.weather_desc} ${data.temperature ?? '?'}°C, ` +
+              `${data.is_day ? 'day' : 'night'}, ${data.city ?? 'unknown'}`
+            )
+          } catch (err) {
+            console.debug('Weather fetch failed, keeping default gradient:', err.message)
+            // 静默降级：保留默认渐变 + 特期殊日背景覆盖
+          }
+        }
+
+        /** 根据天气分类渲染特效粒子 */
+        function renderWeatherEffects(category, isDay) {
+          bgEffectsEl.innerHTML = ''
+          bgEffectsEl.classList.remove('active')
+
+          const needsEffects = ['light_rain', 'moderate_rain', 'heavy_rain', 'thunder',
+            'snow', 'sleet', 'freezing_drizzle', 'freezing_rain']
+          if (!needsEffects.includes(category) && !(category === 'sunny' && !isDay)) {
+            return
+          }
+
+          const frag = document.createDocumentFragment()
+
+          // 雨滴（雨/雷暴/冻雨）
+          if (['light_rain', 'moderate_rain', 'heavy_rain', 'thunder',
+               'freezing_drizzle', 'freezing_rain'].includes(category)) {
+            const density = category === 'heavy_rain' || category === 'thunder' ? 80
+              : category === 'moderate_rain' ? 50 : 25
+            for (let i = 0; i < density; i++) {
+              const drop = document.createElement('div')
+              drop.className = 'raindrop'
+              drop.style.left = Math.random() * 100 + '%'
+              drop.style.animationDuration = (0.5 + Math.random() * 0.8) + 's'
+              drop.style.animationDelay = Math.random() * 2 + 's'
+              if (category === 'freezing_drizzle' || category === 'freezing_rain') {
+                drop.style.background = 'linear-gradient(to bottom, transparent, rgba(200,220,255,0.4))'
+              }
+              frag.appendChild(drop)
+            }
+          }
+
+          // 雪花（雪/雨夹雪）
+          if (['snow', 'sleet'].includes(category)) {
+            const density = 40
+            for (let i = 0; i < density; i++) {
+              const flake = document.createElement('div')
+              flake.className = 'snowflake'
+              flake.style.left = Math.random() * 100 + '%'
+              flake.style.width = flake.style.height = (2 + Math.random() * 5) + 'px'
+              flake.style.animationDuration = (3 + Math.random() * 5) + 's'
+              flake.style.animationDelay = Math.random() * 4 + 's'
+              flake.style.opacity = 0.3 + Math.random() * 0.5
+              frag.appendChild(flake)
+            }
+          }
+
+          // 星星（夜间晴天/晴间多云）
+          if (['sunny', 'partly_cloudy'].includes(category) && !isDay) {
+            for (let i = 0; i < 50; i++) {
+              const star = document.createElement('div')
+              star.className = 'star'
+              star.style.left = Math.random() * 100 + '%'
+              star.style.top = Math.random() * 60 + '%'
+              star.style.animationDuration = (1.5 + Math.random() * 3) + 's'
+              star.style.animationDelay = Math.random() * 3 + 's'
+              star.style.width = star.style.height = (1 + Math.random() * 2) + 'px'
+              frag.appendChild(star)
+            }
+          }
+
+          // 闪电（雷暴）
+          if (category === 'thunder') {
+            const flash = document.createElement('div')
+            flash.className = 'lightning'
+            frag.appendChild(flash)
+          }
+
+          bgEffectsEl.appendChild(frag)
+          bgEffectsEl.classList.add('active')
+        }
+
+        /** 清除天气背景，恢复默认渐变 */
+        function clearWeatherBackground() {
+          weatherActive = false
+          delete document.body.dataset.weatherCategory
+          delete document.body.dataset.daynight
+          bgEffectsEl.innerHTML = ''
+          bgEffectsEl.classList.remove('active')
+        }
+
+        // ──────────────────────────────────────
         // 6. API 请求
         // ──────────────────────────────────────
 
@@ -1054,6 +1356,9 @@
           fetchMonthEvents(state.currentMonth.getFullYear(), state.currentMonth.getMonth())
           // 预加载当月特殊日期图片
           preloadImages(state.currentMonth.getFullYear(), state.currentMonth.getMonth())
+          // 异步加载天气（不阻塞 UI）
+          fetchAndApplyWeather()
+          weatherRefreshTimer = setInterval(fetchAndApplyWeather, 30 * 60 * 1000)
           // 启动实时时钟
           clockTimer = setInterval(() => {
             state.currentTime = new Date()
@@ -1067,6 +1372,7 @@
 
         onUnmounted(() => {
           if (clockTimer) clearInterval(clockTimer)
+          if (weatherRefreshTimer) clearInterval(weatherRefreshTimer)
           if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
             state.mediaRecorder.stop()
           }
